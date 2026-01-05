@@ -1,0 +1,31 @@
+#pragma once
+
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include <tuple>
+#include <typeinfo>
+
+#include "valuesVector.hpp"
+#include "matrix.hpp"
+
+
+enum class BoundaryType
+{
+    Fixed,
+    Free,
+    Boxed,
+    Upper,
+    Lower,
+    UNKNOWN
+};
+
+
+typedef std::vector<size_t> IndexVector;
+typedef std::tuple<ValuesVector, size_t> EtaMatrix;
+typedef std::tuple <size_t, size_t> cudaMatrixSize;
+typedef std::vector<BoundaryType> BoundaryTypeVector;
+typedef size_t cudaVectorSize;
+typedef std::tuple <size_t, size_t> MatrixSize;
+typedef size_t VectorSize;
+
