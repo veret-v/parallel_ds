@@ -1,36 +1,13 @@
-#include <CoinMpsIO.hpp>
+#include <gtest/gtest.h>
 
-#include "valuesVector.hpp"
-#include "matrix.hpp"
-#include "problem.hpp"
-#include "sequentialDualSimplex.hpp"
-#include "parser.hpp"
-
-void test1();
-void test2();
-void test3();
-void test4();
+#include "../src/valuesVector.hpp"
+#include "../src/matrix.hpp"
+#include "../src/problem.hpp"
+#include "../src/sequentialDualSimplex.hpp"
+#include "../src/parser.hpp"
 
 
-int main()
-{
-    // Problem problem;
-    // std::string path = "../tests/test_data/boeing1.mps";
-    // LPparser parser;
-    // parser.readMps(path, problem);
-    // // problem.show();
-    // sequentialDualSimplex solver(problem, "minInfeas");
-    // LPsolution solution = solver.solve("simple");
-    // solution.show();
-
-    test1();
-    test2();
-    test3(); 
-    test4();
-}
-
-
-void test1()
+TEST(DualSimplexSimple, Test1)
 {
     size_t m = 3, n =5;
     ValuesVector costs(std::vector<double>{2, -1, 3, -2, 1});
@@ -62,17 +39,11 @@ void test1()
     true_solution.x = ValuesVector(std::vector<double>{0.5, 1.5, 0, 2, 0});
     true_solution.Z = -4.5;
     true_solution.solved = true;
-
-    std::cout << "Test 1" << std::endl;
-    std::cout << "numeric solution" << std::endl;
-    solution.show();
-    std::cout << "true solution" << std::endl;
-    true_solution.show();
-    std::cout << std::endl << std::endl; 
+    EXPECT_NEAR(solution.Z, true_solution.Z, 1e-8);
 }
 
 
-void test2()
+TEST(DualSimplexSimple, Test2)
 {
     size_t m = 3, n =5;
     ValuesVector costs(std::vector<double>{-14, 5, -2, 1, -8});
@@ -105,17 +76,11 @@ void test2()
     true_solution.x = ValuesVector(std::vector<double>{7, 0, 0, 42, 2});
     true_solution.Z = -72;
     true_solution.solved = true;
-
-    std::cout << "Test 2" << std::endl;
-    std::cout << "numeric solution" << std::endl;
-    solution.show();
-    std::cout << "true solution" << std::endl;
-    true_solution.show();
-    std::cout << std::endl << std::endl; 
+    EXPECT_NEAR(solution.Z, true_solution.Z, 1e-8);
 }
 
 
-void test3()
+TEST(DualSimplexSimple, Test3)
 {
     size_t m = 2, n = 3;
     ValuesVector costs(std::vector<double>{3, 2, 3});
@@ -143,17 +108,11 @@ void test3()
     true_solution.x = ValuesVector(std::vector<double>{0, 0.75, 1, 0.25, 0});
     true_solution.Z = 4.5;
     true_solution.solved = true;
-
-    std::cout << "Test 3" << std::endl;
-    std::cout << "numeric solution" << std::endl;
-    solution.show();
-    std::cout << "true solution" << std::endl;
-    true_solution.show();
-    std::cout << std::endl << std::endl; 
+    EXPECT_NEAR(solution.Z, true_solution.Z, 1e-8);
 }
 
 
-void test4()
+TEST(DualSimplexSimple, Test4)
 {
     size_t m = 3, n = 5;
     ValuesVector costs(std::vector<double>{-2, -3, 0, 0, 0});
@@ -184,15 +143,5 @@ void test4()
     true_solution.x = ValuesVector(std::vector<double>{3, 2, 0, 0, 1});
     true_solution.Z = -12;
     true_solution.solved = true;
-
-    std::cout << "Test 4" << std::endl;
-    std::cout << "numeric solution" << std::endl;
-    solution.show();
-    std::cout << "true solution" << std::endl;
-    true_solution.show();
-    std::cout << std::endl << std::endl; 
+    EXPECT_NEAR(solution.Z, true_solution.Z, 1e-4);
 }
-
-
-
-

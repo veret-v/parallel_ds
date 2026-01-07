@@ -422,17 +422,17 @@ bool sequentialDualSimplex::checkDualFeasible() const
         switch (problem->bound_type[i])
         {
         case BoundaryType::Free:
-            if (d[i] != 0)
+            if (fabs(d[i]) < EPS_D)
                 return false;
             break;
 
         case BoundaryType::Upper:
-            if (d[i] > 0)
+            if (d[i] > EPS_D)
                 return false;
             break;
 
         case BoundaryType::Lower:
-            if (d[i] < 0)
+            if (d[i] < -EPS_D)
                 return false;
             break;
         }
@@ -529,7 +529,12 @@ bool sequentialDualSimplex::minimizeDualInfeasibility()
 
     while (true)
     {
-        if (!perturbed && cycle_num > MAX_CYCLE) perturbCosts();
+        if (!perturbed && cycle_num > MAX_CYCLE) 
+        {
+            perturbCosts();
+            y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
+            d.setValues(problem->costs(non_basis_indexes) - AN.T().dot(y), non_basis_indexes);
+        }
         
         // (Step 2) Pricing
         IndexVector check_indexes;
@@ -557,87 +562,85 @@ bool sequentialDualSimplex::minimizeDualInfeasibility()
             break;
         }
 
-        size_t p_idx = 0;
-        size_t p = basis_indexes[p_idx];
-        double b_min = problem->RHS[p_idx];
-        if (check_indexes.size())
-        {
-            p_idx = check_indexes[0];
-            p = basis_indexes[p_idx];
-            b_min = f[p_idx];
+        size_t p, p_idx;
+        size_t q, q_idx;
 
-            for (auto i : check_indexes)
-            {
-                size_t j = basis_indexes[i]; 
-                if (fabs(problem->RHS[i]) < fabs(b_min) || (fabs(fabs(b_min) - fabs(problem->RHS[i])) < EPS_BOUND && distrib(gen) == 1)) 
-                {
-                    p = j;
-                    p_idx = i;
-                    b_min = problem->RHS[i];
-                } 
-                
-            }
-        }
-        
-        // (Step 3) BTran
-        ValuesVector rho(problem->constraints_size);
-        rho = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, p_idx), true);
-        
-        // (Step 4) Pivot row
+        double opt_step = 0;
+
         ValuesVector alpha(non_basis_size);
-        alpha = AN.T().dot(rho);
+        ValuesVector rho(problem->constraints_size);
+        double theta;
 
-        // (Step 5) Ratio Test
-        ValuesVector alpha_tmp(non_basis_size);
-        ValuesVector f_tmp(problem->constraints_size);
-        if (f[p_idx] > 0)
-        {
-            alpha_tmp = -alpha;
-            f_tmp = -f;
-        }
-        else
-        {
-            alpha_tmp = alpha;
-            f_tmp = f;
-        }
-        
-        IndexVector F, F_reserved;
-        for (size_t i = 0; i < non_basis_indexes.size(); i++)
-        {
-            size_t j = non_basis_indexes[i];
-            if (((d[j] >= 0 && alpha_tmp[i] > 0) ||
-                (d[j] <= 0 && alpha_tmp[i] < 0)))
-                F.push_back(i);
+        bool start = true;
 
-            if (alpha_tmp[i] != 0)
+        for (auto p_idx_tmp : check_indexes)
+        {
+            size_t p_tmp = basis_indexes[p_idx_tmp]; 
+            
+            // (Step 3) BTran
+            rho = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, p_idx_tmp), true);
+            
+            // (Step 4) Pivot row
+            alpha = AN.T().dot(rho);
+
+            // (Step 5) Ratio Test
+            ValuesVector alpha_tmp(non_basis_size);
+            ValuesVector f_tmp(problem->constraints_size);
+            if (f[p_idx_tmp] > 0)
             {
-                F_reserved.push_back(i);
+                alpha_tmp = -alpha;
+                f_tmp = -f;
+            }
+            else
+            {
+                alpha_tmp = alpha;
+                f_tmp = f;
             }
             
-        }
-
-        if (!F.size())
-        {
-            F = F_reserved;
-        }
-        
-
-        size_t q_idx = F[0];
-        size_t q = non_basis_indexes[q_idx];;
-        double theta = d[q] / alpha_tmp[q_idx];
-        for (auto i : F)
-        {   
-            size_t j = non_basis_indexes[i];
-            double theta_tmp = d[j] / alpha_tmp[i];
-            if (theta_tmp < theta || (fabs(theta_tmp - theta) < EPS_BOUND && distrib(gen) == 1)) 
+            IndexVector F, F_reserved;
+            for (size_t i = 0; i < non_basis_indexes.size(); i++)
             {
-                theta = theta_tmp;
-                q = j;
-                q_idx = i;
+                size_t j = non_basis_indexes[i];
+                if (((d[j] >= 0 && alpha_tmp[i] > EPS_A) ||
+                    (d[j] <= 0 && alpha_tmp[i] < -EPS_A)))
+                    F.push_back(i);                
+            }
+
+            if (!F.size()) continue;
+
+            size_t q_idx_tmp = F[0];
+            size_t q_tmp = non_basis_indexes[q_idx_tmp];;
+            theta = d[q_tmp] / alpha_tmp[q_idx_tmp];
+            for (auto i : F)
+            {   
+                size_t j = non_basis_indexes[i];
+                double theta_tmp = d[j] / alpha_tmp[i];
+                if (theta_tmp < theta || (fabs(theta_tmp - theta) < EPS_BOUND && distrib(gen) == 1)) 
+                {
+                    theta = theta_tmp;
+                    q_tmp = j;
+                    q_idx_tmp = i;
+                } 
+            }
+
+            theta = d[q_tmp] / alpha[q_idx_tmp];
+
+            if (f[p_idx_tmp] * theta < opt_step || (fabs(fabs(opt_step) - fabs(f[p_idx_tmp])) < EPS_BOUND && distrib(gen) == 1) || start) 
+            {
+                p = p_tmp;
+                p_idx = p_idx_tmp;
+                q = q_tmp;
+                q_idx = q_idx_tmp;
+                opt_step = f[p_idx_tmp] * theta;
+                start = false;
             } 
         }
 
+        rho = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, p_idx), true);
+        alpha = AN.T().dot(rho);
+
         theta = d[q] / alpha[q_idx];
+
 
         // ValuesVector alpha_tmp(non_basis_size);
         // ValuesVector f_tmp(problem->constraints_size);
@@ -758,11 +761,11 @@ bool sequentialDualSimplex::minimizeDualInfeasibility()
                 inf_f_indexes.push_back(i);
         }
 
-        // calcDualInfeasible();
+        calcDualInfeasible();
         iteration += 1;
         if (fabs(theta) < EPS_A) cycle_num += 1;
 
-        std::cout << iteration << " : Z = "<< obj_func_val << " p = " << p << " q = " << q << std::endl;
+        std::cout << iteration << " : Z = "<< obj_func_val << " p = " << p << " q = " << q << "opt_step = " << opt_step << std::endl;
 
         // if (!linalg::checkPFIdecompose(B_eta_repr, B)) std::cerr << "Incorrect decompose" << std::endl;
     }
