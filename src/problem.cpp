@@ -163,3 +163,19 @@ void Problem::show()
         std::cout << boundaryTypeToString(bound_type[i]) << "  " << lower_bound[i] << "  " << upper_bound[i] <<std::endl;
     }
 }
+
+
+// void Problem::scaleProblem()
+// {
+//     ValuesVector row_max = A.max(1);
+//     ValuesVector col_max = A.max(0);
+
+//     double row_ratio = row_max.max() / row_max.min();
+//     double col_ratio = col_max.max() / col_max.min();
+
+//     if (std::max(row_ratio, col_ratio) > EPS_COND)
+//     {
+//         /* code */
+//     }
+    
+// }

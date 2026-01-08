@@ -4,6 +4,7 @@
 #include <tuple>
 #include <iostream>
 #include <vector>
+#include <cmath>
 
 #include "matrix.hpp"
 #include "valuesVector.hpp"
@@ -11,6 +12,7 @@
 
 
 #define EPS_ZERO 1e-8
+#define EPS_SWAP 1e-6
 
 
 namespace linalg

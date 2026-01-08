@@ -51,6 +51,14 @@ double ValuesVector::mean() const
 }
 
 
+double ValuesVector::norm() const
+{
+    double sum = 0;
+    for (auto a_i : data)
+        sum += pow(a_i, 2);
+    return sum;
+}
+
 
 ValuesVector& ValuesVector::operator=(const ValuesVector& values_vector)
 {

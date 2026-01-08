@@ -60,13 +60,13 @@ bool linalg::PFIdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed)
     for (size_t i = 0; i < m; i++)
     {
         is_identity = true;
-        if (abs(buff_A(i, i)) < EPS_ZERO)
+        if (fabs(buff_A(i, i)) < EPS_ZERO)
         {
             size_t swap_id  = i;
             for (size_t k = i; k < m; k++)
             {
 
-                if (abs(buff_A(k, i)) > EPS_ZERO) 
+                if (fabs(buff_A(k, i)) > EPS_SWAP) 
                 {
                     swap_id = k;
                     break;

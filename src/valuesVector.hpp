@@ -4,6 +4,8 @@
 #include <string>
 #include <iostream>
 #include <iterator>
+#include <algorithm>
+#include <cmath>
 
 #include <CoinMpsIO.hpp>
 
@@ -45,6 +47,9 @@ public:
     
     double dot(const ValuesVector &values_vector) const;
     double mean() const;
+    double norm() const;
+    // double minAbs() const {std::min_element(data.begin(), data.end(), [](double a, double b) {return fabs(a) > fabs(b);});};
+    // double maxAbs() const {std::max_element(data.begin(), data.end(), [](double a, double b) {return fabs(a) < fabs(b);});};
 
     void setValues(const ValuesVector& values_vector, const IndexVector& index_vector);
     void pushBack(const double& value);

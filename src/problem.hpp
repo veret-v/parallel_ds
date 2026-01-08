@@ -4,12 +4,16 @@
 #include <tuple>
 #include <iostream>
 #include <string>
+#include <cmath>
 #include <unordered_map>
 
 #include "linalg.hpp"
 #include "valuesVector.hpp"
 #include "matrix.hpp"
 #include "types.hpp"
+
+
+#define EPS_COND 1e6
 
 
 class sequentialDualSimplex;
@@ -50,6 +54,8 @@ private:
     BoundaryType stringToBoundaryType(const std::string& bound_type_name) const;
     std::string boundaryTypeToString(const BoundaryType& bound_type_name) const;
     void setBoundary(const size_t& idx, const std::string& bound_type_name);
+
+    // void scaleProblem();
 
 public:
     Problem(const Problem &problem);
