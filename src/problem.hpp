@@ -17,6 +17,8 @@
 
 
 class sequentialDualSimplex;
+class parallelDualSimplex;
+class BaseDualSimplex;
 class LPparser;
 
 
@@ -24,6 +26,8 @@ class Problem
 {
 
 friend class sequentialDualSimplex;
+friend class parallelDualSimplex;
+friend class BaseDualSimplex;
 friend class LPparser;
 
 private:

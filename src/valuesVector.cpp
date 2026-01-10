@@ -60,6 +60,14 @@ double ValuesVector::norm() const
 }
 
 
+size_t ValuesVector::countNonZero() const
+{
+    double count = 0;
+    for (auto a_i : data)
+        count += (a_i == 0) ? 0 : 1;
+    return count;
+}
+
 ValuesVector& ValuesVector::operator=(const ValuesVector& values_vector)
 {
     data = values_vector.data;

@@ -31,20 +31,24 @@
 
 #define PERTURB_RATIO 0.25
 #define PSI           1e-5
+#define CAND_RATIO    0.95
+#define MAX_CYCLE     5
+#define REFACT_FREQ   50
 
 #define DEBUG
 
-
-class BaseDualSimplex
+class parallelDualSimplex
 {
-protected:
+private:
     enum class SolverMethods
     {
+        elaboratedMethod,
         UNKNOWN
     };
 
     enum class PresolverMethods
     {
+        minDualInfeasibility,
         UNKNOWN
     };
 
@@ -65,9 +69,6 @@ protected:
 
     LPsolution solution;
 
-    PresolverMethods presolver_method;
-    SolverMethods solver_method;
-
     ValuesVector x;
     ValuesVector d;
     ValuesVector original_costs;
@@ -86,7 +87,9 @@ protected:
     PresolverMethods stringToPreSolverMethod(const std::string& method_name);
 
     Phase1OutStatus presolve(const std::string& presolver_method_name);
+    Phase1OutStatus minimizeDualInfeasibility();
 
+    bool elaboratedMethod();
 
     Phase1OutStatus callPresolver(const PresolverMethods method);
     bool callDualSolver(const SolverMethods method);
@@ -101,6 +104,8 @@ protected:
     bool checkDualFeasible()   const;
     bool checkPerturbNeed()    const;
 
+    ValuesVector initBetaWeights();
+
     double getWeight(const size_t i) const;
     size_t calcNonzeroInColumn(const size_t i) const;
 
@@ -111,7 +116,7 @@ protected:
     bool setRatioTestCandidates(IndexVector& F,const ValuesVector& tmp_alpha_p);
 
 public:
-    BaseDualSimplex(
+    parallelDualSimplex(
         Problem& _problem,
         const std::string& presolver_method_name
     );

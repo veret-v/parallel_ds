@@ -43,6 +43,7 @@ public:
 
     size_t getSize() const {return data.size();};
     size_t getSize() {return data.size();};
+    size_t countNonZero() const;
     const std::vector<double>& getData() {return data;};
     
     double dot(const ValuesVector &values_vector) const;

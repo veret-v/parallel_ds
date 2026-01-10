@@ -25,6 +25,14 @@ include_directories(${COINUTILS_INCLUDE_DIRS})
 add_executable(${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME} ${COINUTILS_LIBRARY})
 
+# OpenMP
+find_package(OpenMP REQUIRED)
+
+if(OpenMP_CXX_FOUND)
+    message(STATUS "OpenMP support found")
+    target_link_libraries(${PROJECT_NAME} OpenMP::OpenMP_CXX)
+endif()
+
 target_sources(${PROJECT_NAME} PRIVATE "src/main.cpp" )
 target_include_directories(${PROJECT_NAME} PRIVATE "${PROJECT_SOURCE_DIR}")
 

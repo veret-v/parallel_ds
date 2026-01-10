@@ -145,4 +145,58 @@ void linalg::dotEtaMatrix(const EtaMatrix& eta_matrix, Matrix& matrix)
 }
 
 
+ValuesVector linalg::LUsolve(const std::vector<EtaMatrix>& A, const ValuesVector& b, const bool transpose)
+{
+    return ValuesVector();
+}
 
+
+bool linalg::LUdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed)
+{
+    size_t m = std::get<0>(A.getSize());
+    Matrix U = A;
+    Matrix per_rows(m, m);
+    Matrix per_cols(m, m);
+    std::vector<EtaMatrix> L;
+    std::unordered_set<size_t> P(m);
+    std::unordered_set<size_t>  Q(m);
+
+    for (size_t i = 0; i < m; i++)
+    {
+        P.insert(i);
+        Q.insert(i);
+    }
+
+    for (size_t k = 0; k < m; k++)
+    {
+        size_t p, q;
+        for (size_t p : P)
+            for (size_t q : Q)
+                if (U(p, q) != 0) break;
+        
+        per_rows(p, k) = 1;
+        per_cols(k, q) = 1;
+
+        P.erase(P.find(p));
+        Q.erase(Q.find(q));
+
+
+        ValuesVector L_tmp(m);
+        L_tmp[p] = 1;
+        for (auto i : P)
+        {
+            if (U(i, q) != 0)
+            {
+               L_tmp[i] = -U(i, q) / U(p, q);
+               U(i, q) = 0;
+            }
+            
+            for (auto j : Q)
+                U(i, j) += L_tmp[i] * U(p, j);
+        }
+        L.push_back(EtaMatrix(L_tmp, p));
+    }
+    return true;
+    
+    
+}

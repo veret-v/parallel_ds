@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <unordered_set>
 
 #include "matrix.hpp"
 #include "valuesVector.hpp"
@@ -18,10 +19,15 @@
 namespace linalg
 {
     Matrix ones(const size_t n);
+    
     ValuesVector unit(const size_t size, const size_t p);
+
     ValuesVector PFIsolve(const std::vector<EtaMatrix>& A, const ValuesVector& b, const bool transpose);
     bool PFIdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed);
     bool checkPFIdecompose(const std::vector<EtaMatrix>& B_eta_repr, const Matrix& B);
     void dotEtaMatrix(const EtaMatrix& eta_matrix, Matrix& matrix);
+
+    ValuesVector LUsolve(const std::vector<EtaMatrix>& A, const ValuesVector& b, const bool transpose);
+    bool LUdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed);
 } // namespace linalg
 
