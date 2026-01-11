@@ -20,6 +20,19 @@ enum class BoundaryType
     UNKNOWN
 };
 
+enum class SolverMethods
+{
+    simpleRatio,
+    elaboratedMethod,
+    UNKNOWN
+};
+
+enum class PresolverMethods
+{
+    minDualInfeasibility,
+    panMethod,
+    UNKNOWN
+};
 
 typedef std::vector<size_t> IndexVector;
 typedef std::tuple<ValuesVector, size_t> EtaMatrix;

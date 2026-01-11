@@ -20,6 +20,7 @@
 #include "matrix.hpp"
 #include "types.hpp"
 #include "LPsolution.hpp"
+#include "baseDualSimplex.hpp"
 
 #define EPS_BOUND 1e-10
 #define EPS_ALPHA 1e-8
@@ -37,90 +38,25 @@
 
 #define DEBUG
 
-class parallelDualSimplex
+class ParallelDualSimplex : public BaseDualSimplex
 {
-private:
-    enum class SolverMethods
-    {
-        elaboratedMethod,
-        UNKNOWN
-    };
+protected:
+   
+    SolverMethods    stringToSolverMethod(const std::string& method_name) override;
+    PresolverMethods stringToPreSolverMethod(const std::string& method_name) override;
 
-    enum class PresolverMethods
-    {
-        minDualInfeasibility,
-        UNKNOWN
-    };
-
-    enum class Phase1OutStatus
-    {
-        Solved,
-        DualInfeas,
-        NeedRestart
-    };
-
-    bool perturbed = false;
-
-    size_t maxcycle;
-
-    size_t non_basis_size;
-
-    Problem* problem;
-
-    LPsolution solution;
-
-    ValuesVector x;
-    ValuesVector d;
-    ValuesVector original_costs;
-
-    IndexVector basis_indexes;
-    IndexVector non_basis_indexes;
-
-    std::vector<EtaMatrix> B_eta_repr;
-    Matrix B;
-    Matrix AN;
-
-    double obj_func_val;
-
-
-    SolverMethods    stringToSolverMethod(const std::string& method_name);
-    PresolverMethods stringToPreSolverMethod(const std::string& method_name);
-
-    Phase1OutStatus presolve(const std::string& presolver_method_name);
     Phase1OutStatus minimizeDualInfeasibility();
 
     bool elaboratedMethod();
 
-    Phase1OutStatus callPresolver(const PresolverMethods method);
-    bool callDualSolver(const SolverMethods method);
-    bool callPrimalSolver();
-
-    void calcDualInfeasible();
-    size_t counterDualInfeasible() const;
-
-    void perturbCosts();
-
-    bool checkPrimalFeasible() const;
-    bool checkDualFeasible()   const;
-    bool checkPerturbNeed()    const;
+    Phase1OutStatus callPresolver(const PresolverMethods method) override;
+    bool callDualSolver(const SolverMethods method) override;
+    bool callPrimalSolver() override;
 
     ValuesVector initBetaWeights();
 
-    double getWeight(const size_t i) const;
-    size_t calcNonzeroInColumn(const size_t i) const;
-
-    bool minLex(const ValuesVector& a, const ValuesVector& b);
-    ValuesVector prepareForLex(const ValuesVector& a, const size_t idx);
-
-    bool setDelta(const size_t& j, double& delta, bool& is_lower);
-    bool setRatioTestCandidates(IndexVector& F,const ValuesVector& tmp_alpha_p);
-
 public:
-    parallelDualSimplex(
-        Problem& _problem,
-        const std::string& presolver_method_name
-    );
+    using BaseDualSimplex::BaseDualSimplex;
 
-    LPsolution solve(const std::string& method_name);
 };
 

@@ -31,7 +31,7 @@ ValuesVector BaseDualSimplex::prepareForLex(const ValuesVector& a, const size_t 
 //----------------------------------------------------------------------------------------
 // Convert string to exiting methods for presolver
 //----------------------------------------------------------------------------------------
-BaseDualSimplex::PresolverMethods BaseDualSimplex::stringToPreSolverMethod(
+PresolverMethods BaseDualSimplex::stringToPreSolverMethod(
     const std::string& method_name
 )
 {
@@ -42,7 +42,7 @@ BaseDualSimplex::PresolverMethods BaseDualSimplex::stringToPreSolverMethod(
 //----------------------------------------------------------------------------------------
 // Convert string to exiting methods for solver
 //----------------------------------------------------------------------------------------
-BaseDualSimplex::SolverMethods BaseDualSimplex::stringToSolverMethod(
+SolverMethods BaseDualSimplex::stringToSolverMethod(
     const std::string& method_name
 )
 {
@@ -55,19 +55,59 @@ BaseDualSimplex::SolverMethods BaseDualSimplex::stringToSolverMethod(
 //----------------------------------------------------------------------------------------
 BaseDualSimplex::Phase1OutStatus BaseDualSimplex::presolve(const std::string& presolver_method_name)
 {
+    std::cout << "Phase 1 : started" << std::endl;
     auto method = stringToPreSolverMethod(presolver_method_name);
     presolver_method = method;
     if (checkPerturbNeed())
         perturbCosts();
+
+    Phase1OutStatus status = Phase1OutStatus::NeedRestart;
+    while(status == Phase1OutStatus::NeedRestart)
+        status = callPresolver(method);
     
-    return callPresolver(method); 
+    if (status == Phase1OutStatus::DualInfeas)
+    {
+        std::cout << "-- Problem is dual infeasible" << std::endl;
+        return status;
+    }
+    std::cout << "-- Problem is feasible" << std::endl;
+
+
+    for (auto i : non_basis_indexes)
+    {
+        switch (problem->bound_type[i])
+        {
+        case BoundaryType::Fixed:
+            x[i] = problem->lower_bound[i];
+            break;
+            
+        case BoundaryType::Free:
+            x[i] = 0;
+            break;
+
+        case BoundaryType::Boxed:
+            x[i] = (d[i] > 0) ? problem->lower_bound[i] : problem->upper_bound[i];
+            break;
+
+        case BoundaryType::Upper:
+            x[i] = problem->upper_bound[i];
+            break;
+
+        case BoundaryType::Lower:
+            x[i] = problem->lower_bound[i];
+            break;
+        }
+    }
+    std::cout << "-- Nonbasis variables bounds setted done" << std::endl;
+    std::cout << "Phase 1 : ended" << std::endl;
+    return status;
 }
 
 
 //----------------------------------------------------------------------------------------
 // Choose presolver 
 //----------------------------------------------------------------------------------------
-BaseDualSimplex::Phase1OutStatus BaseDualSimplex::callPresolver(const BaseDualSimplex::PresolverMethods method)
+BaseDualSimplex::Phase1OutStatus BaseDualSimplex::callPresolver(const PresolverMethods method)
 {
     Phase1OutStatus status;
     switch (method) 
@@ -83,7 +123,7 @@ BaseDualSimplex::Phase1OutStatus BaseDualSimplex::callPresolver(const BaseDualSi
 //----------------------------------------------------------------------------------------
 // Choose solver 
 //----------------------------------------------------------------------------------------
-bool BaseDualSimplex::callDualSolver(const BaseDualSimplex::SolverMethods method)
+bool BaseDualSimplex::callDualSolver(const SolverMethods method)
 {
     bool status;
     switch (method) 
@@ -146,7 +186,7 @@ LPsolution BaseDualSimplex::solve(const std::string& method_name)
         solution.x = x(0, problem->logicals_size);
         solution.Z = obj_func_val;
 
-        std::cout << "Phase 2 : started" << std::endl;
+        std::cout << "Phase 2 : ended" << std::endl;
 
         return solution;
     }
@@ -167,7 +207,7 @@ LPsolution BaseDualSimplex::solve(const std::string& method_name)
         solution.x = x(0, problem->logicals_size);
         solution.Z = obj_func_val;
 
-        std::cout << "Phase 2 : started" << std::endl;
+        std::cout << "Phase 2 : ended" << std::endl;
 
         return solution;
     }
@@ -178,23 +218,17 @@ LPsolution BaseDualSimplex::solve(const std::string& method_name)
         solution.x = x(0, problem->logicals_size);
         solution.Z = obj_func_val;
 
-        std::cout << "Phase 2 : started" << std::endl;
+        std::cout << "Phase 2 : ended" << std::endl;
 
         return solution;
     }
-    
-    
-    
 }
 
 
 //----------------------------------------------------------------------------------------
 // Constructor for solver, additionally finds dual feasible basis
 //----------------------------------------------------------------------------------------
-BaseDualSimplex::BaseDualSimplex(
-    Problem& _problem, 
-    const std::string& presolver_method_name
-)
+BaseDualSimplex::BaseDualSimplex(Problem& _problem)
 {
     std::cout << "Solver initialization : started" << std::endl;
 
@@ -218,39 +252,7 @@ BaseDualSimplex::BaseDualSimplex(
     B = problem->A(basis_indexes);
     linalg::PFIdecompose(B, B_eta_repr);
 
-    std::cout << "Solver initialization : attributes setted" << std::endl;
-
-    // if (!linalg::checkPFIdecompose(B_eta_repr, B)) std::cerr << "Incorrect decompose" << std::endl;
-    std::cout << "Phase 1 : started" << std::endl;
-    while(presolve(presolver_method_name) == Phase1OutStatus::NeedRestart);
-    std::cout << "Phase 1 : ended" << std::endl;
-
-
-    for (auto i : non_basis_indexes)
-    {
-        switch (problem->bound_type[i])
-        {
-        case BoundaryType::Fixed:
-            x[i] = problem->lower_bound[i];
-            break;
-            
-        case BoundaryType::Free:
-            x[i] = 0;
-            break;
-
-        case BoundaryType::Boxed:
-            x[i] = (d[i] > 0) ? problem->lower_bound[i] : problem->upper_bound[i];
-            break;
-
-        case BoundaryType::Upper:
-            x[i] = problem->upper_bound[i];
-            break;
-
-        case BoundaryType::Lower:
-            x[i] = problem->lower_bound[i];
-            break;
-        }
-    }
+    std::cout << "Solver initialization : attributes setted" << std::endl;    
     
 }
 

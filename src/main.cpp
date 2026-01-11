@@ -10,18 +10,20 @@
 
 int main()
 {
-    std::string path = "../tests/test_data/adlittle.mps";
+    std::string path = "../tests/test_data/afiro.mps";
     LPparser parser;
 
     Problem problem;
     parser.readMps(path, problem);
-    parallelDualSimplex solver(problem, "minInfeas");
+    ParallelDualSimplex solver(problem);
+    solver.presolve("minInfeas");
     LPsolution solution = solver.solve("elaborated");
     solution.show();
 
     Problem problem1;
     parser.readMps(path, problem1);
-    sequentialDualSimplex solver1(problem1, "minInfeas");
+    SequentialDualSimplex solver1(problem1);
+    solver1.presolve("minInfeas");
     LPsolution solution1 = solver1.solve("elaborated");
     solution1.show();
 }

@@ -16,8 +16,8 @@
 #define EPS_COND 1e6
 
 
-class sequentialDualSimplex;
-class parallelDualSimplex;
+class SequentialDualSimplex;
+class ParallelDualSimplex;
 class BaseDualSimplex;
 class LPparser;
 
@@ -25,8 +25,8 @@ class LPparser;
 class Problem
 {
 
-friend class sequentialDualSimplex;
-friend class parallelDualSimplex;
+friend class SequentialDualSimplex;
+friend class ParallelDualSimplex;
 friend class BaseDualSimplex;
 friend class LPparser;
 

@@ -31,7 +31,8 @@ TEST(DualSimplexSimple, Test1)
     Problem test_problem(
         bound_type, range_type, costs, lower_range, upper_range, 
         lower_bound, upper_bound, A); 
-    sequentialDualSimplex solver(test_problem, "minInfeas");
+    SequentialDualSimplex solver(test_problem);
+    solver.presolve("minInfeas");
     LPsolution solution = solver.solve("simple");
 
     LPsolution true_solution;
@@ -68,7 +69,8 @@ TEST(DualSimplexSimple, Test2)
     Problem test_problem(
         bound_type, range_type, costs, lower_range, upper_range, 
         lower_bound, upper_bound, A); 
-    sequentialDualSimplex solver(test_problem, "minInfeas");
+    SequentialDualSimplex solver(test_problem);
+    solver.presolve("minInfeas");
     LPsolution solution = solver.solve("simple");
 
     LPsolution true_solution;
@@ -100,7 +102,8 @@ TEST(DualSimplexSimple, Test3)
     Problem test_problem(
         bound_type, range_type, costs, lower_range, upper_range, 
         lower_bound, upper_bound, A); 
-    sequentialDualSimplex solver(test_problem, "minInfeas");
+    SequentialDualSimplex solver(test_problem);
+    solver.presolve("minInfeas");
     LPsolution solution = solver.solve("simple");
 
     LPsolution true_solution;
@@ -135,7 +138,8 @@ TEST(DualSimplexSimple, Test4)
     Problem test_problem(
         bound_type, range_type, costs, lower_range, upper_range, 
         lower_bound, upper_bound, A); 
-    sequentialDualSimplex solver(test_problem, "minInfeas");
+    SequentialDualSimplex solver(test_problem);
+    solver.presolve("minInfeas");
     LPsolution solution = solver.solve("simple");
 
     LPsolution true_solution;

@@ -12,8 +12,6 @@
 #include <queue>
 #include <algorithm>
 
-#include <omp.h>
-
 #include "problem.hpp"
 #include "linalg.hpp"
 #include "valuesVector.hpp"
@@ -38,16 +36,6 @@
 class BaseDualSimplex
 {
 protected:
-    enum class SolverMethods
-    {
-        UNKNOWN
-    };
-
-    enum class PresolverMethods
-    {
-        UNKNOWN
-    };
-
     enum class Phase1OutStatus
     {
         Solved,
@@ -82,15 +70,12 @@ protected:
     double obj_func_val;
 
 
-    SolverMethods    stringToSolverMethod(const std::string& method_name);
-    PresolverMethods stringToPreSolverMethod(const std::string& method_name);
+    virtual SolverMethods    stringToSolverMethod(const std::string& method_name);
+    virtual PresolverMethods stringToPreSolverMethod(const std::string& method_name);
 
-    Phase1OutStatus presolve(const std::string& presolver_method_name);
-
-
-    Phase1OutStatus callPresolver(const PresolverMethods method);
-    bool callDualSolver(const SolverMethods method);
-    bool callPrimalSolver();
+    virtual Phase1OutStatus callPresolver(const PresolverMethods method);
+    virtual bool callDualSolver(const SolverMethods method);
+    virtual bool callPrimalSolver();
 
     void calcDualInfeasible();
     size_t counterDualInfeasible() const;
@@ -111,11 +96,9 @@ protected:
     bool setRatioTestCandidates(IndexVector& F,const ValuesVector& tmp_alpha_p);
 
 public:
-    BaseDualSimplex(
-        Problem& _problem,
-        const std::string& presolver_method_name
-    );
-
+    BaseDualSimplex(Problem& _problem);
+    
+    Phase1OutStatus presolve(const std::string& presolver_method_name);
     LPsolution solve(const std::string& method_name);
 };
 

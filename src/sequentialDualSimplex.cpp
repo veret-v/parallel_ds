@@ -1,37 +1,10 @@
 #include "sequentialDualSimplex.hpp"
 
 
-bool sequentialDualSimplex::minLex(const ValuesVector& a, const ValuesVector& b)
-{
-    size_t min_size = std::min(a.getSize(), b.getSize());
-    
-    for (size_t i = 0; i < min_size; ++i) {
-        const double epsilon = 1e-12;
-        if (std::fabs(a[i] - b[i]) > epsilon) 
-            return a[i] < b[i];
-        
-    } 
-    
-    return a.getSize() < b.getSize();
-}
-
-
-ValuesVector sequentialDualSimplex::prepareForLex(const ValuesVector& a, const size_t idx)
-{
-    size_t lex_size = a.getSize() + problem->logicals_size;
-    ValuesVector lex_vector(lex_size);
-
-    for (size_t i = 0; i < lex_size; i++)
-        lex_vector[i] = (i < a.getSize()) ? a[i] : (i == idx + a.getSize()) ? 1 : 0;
-
-    return lex_vector;
-}
-
-
 //----------------------------------------------------------------------------------------
 // Convert string to exiting methods for presolver
 //----------------------------------------------------------------------------------------
-sequentialDualSimplex::PresolverMethods sequentialDualSimplex::stringToPreSolverMethod(
+PresolverMethods SequentialDualSimplex::stringToPreSolverMethod(
     const std::string& method_name
 )
 {
@@ -51,7 +24,7 @@ sequentialDualSimplex::PresolverMethods sequentialDualSimplex::stringToPreSolver
 //----------------------------------------------------------------------------------------
 // Convert string to exiting methods for solver
 //----------------------------------------------------------------------------------------
-sequentialDualSimplex::SolverMethods sequentialDualSimplex::stringToSolverMethod(
+SolverMethods SequentialDualSimplex::stringToSolverMethod(
     const std::string& method_name
 )
 {
@@ -69,22 +42,9 @@ sequentialDualSimplex::SolverMethods sequentialDualSimplex::stringToSolverMethod
 
 
 //----------------------------------------------------------------------------------------
-// Dual simplex method: Phase 1(Find dual feasible basis)
-//----------------------------------------------------------------------------------------
-sequentialDualSimplex::Phase1OutStatus sequentialDualSimplex::presolve(const std::string& presolver_method_name)
-{
-    auto method = stringToPreSolverMethod(presolver_method_name);
-    if (checkPerturbNeed())
-        perturbCosts();
-    
-    return callPresolver(method); 
-}
-
-
-//----------------------------------------------------------------------------------------
 // Choose presolver 
 //----------------------------------------------------------------------------------------
-sequentialDualSimplex::Phase1OutStatus sequentialDualSimplex::callPresolver(const sequentialDualSimplex::PresolverMethods method)
+SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::callPresolver(const PresolverMethods method)
 {
     Phase1OutStatus status;
     switch (method) 
@@ -108,7 +68,7 @@ sequentialDualSimplex::Phase1OutStatus sequentialDualSimplex::callPresolver(cons
 //----------------------------------------------------------------------------------------
 // Choose solver 
 //----------------------------------------------------------------------------------------
-bool sequentialDualSimplex::callDualSolver(const sequentialDualSimplex::SolverMethods method)
+bool SequentialDualSimplex::callDualSolver(const SolverMethods method)
 {
     bool status;
     switch (method) 
@@ -132,185 +92,9 @@ bool sequentialDualSimplex::callDualSolver(const sequentialDualSimplex::SolverMe
 //----------------------------------------------------------------------------------------
 // Choose priaml solver 
 //----------------------------------------------------------------------------------------
-bool sequentialDualSimplex::callPrimalSolver()
+bool SequentialDualSimplex::callPrimalSolver()
 {
    return true;
-}
-
-//----------------------------------------------------------------------------------------
-// Dual simplex method: Phase 2(Find solution)
-//----------------------------------------------------------------------------------------
-LPsolution sequentialDualSimplex::solve(const std::string& method_name)
-{
-    std::cout << "Phase 2 : started" << std::endl;
-
-    auto method = stringToSolverMethod(method_name);
-    bool status_code = callDualSolver(method);
-    
-    if (status_code && perturbed) // optimal solution case
-    {
-        std::cout << "-- Optimal solution obtained with perturbation" << std::endl;
-
-        problem->costs = original_costs;
-        perturbed = false;
-
-        if (!checkPrimalFeasible() && checkDualFeasible()) 
-        {
-            callDualSolver(method);
-
-            std::cout << "-- Correction in primal infeasible and dual feasible case done" << std::endl;
-        }
-        else if (checkPrimalFeasible() && !checkDualFeasible())
-        {
-            callPrimalSolver();
-
-            std::cout << "-- Correction in primal feasible and dual infeasible case done" << std::endl;
-        }
-        else if (!checkPrimalFeasible() && !checkDualFeasible())
-        {
-            Phase1OutStatus status_code = minimizeDualInfeasibility();
-            if (status_code == Phase1OutStatus::Solved)
-                callDualSolver(method);
-
-            std::cout << "-- Correction in primal infeasible and dual infeasible case done" << std::endl;
-        }
-        std::cout << "-- Solution obtained" << std::endl;
-
-        solution.x = x(0, problem->logicals_size);
-        solution.Z = obj_func_val;
-
-        std::cout << "Phase 2 : started" << std::endl;
-
-        return solution;
-    }
-    else if (!status_code && perturbed) // dual unbound case
-    {
-        std::cout << "-- Optimal unbounded solution obtained with perturbation" << std::endl;
-
-        problem->costs = original_costs;
-        perturbed = false;
-
-        Phase1OutStatus status_code = minimizeDualInfeasibility();
-        if (status_code == Phase1OutStatus::Solved)
-            callDualSolver(method);
-
-        std::cout << "-- Correction done" << std::endl;
-        std::cout << "-- Solution obtained" << std::endl;
-
-        solution.x = x(0, problem->logicals_size);
-        solution.Z = obj_func_val;
-
-        std::cout << "Phase 2 : started" << std::endl;
-
-        return solution;
-    }
-    else  // without perturbation case
-    {
-        std::cout << "-- Solution obtained" << std::endl;
-
-        solution.x = x(0, problem->logicals_size);
-        solution.Z = obj_func_val;
-
-        std::cout << "Phase 2 : started" << std::endl;
-
-        return solution;
-    }
-    
-    
-    
-}
-
-
-//----------------------------------------------------------------------------------------
-// Constructor for solver, additionally finds dual feasible basis
-//----------------------------------------------------------------------------------------
-sequentialDualSimplex::sequentialDualSimplex(
-    Problem& _problem, 
-    const std::string& presolver_method_name
-)
-{
-    std::cout << "Solver initialization : started" << std::endl;
-
-    problem = &_problem;
-
-    non_basis_size = problem->problem_size - problem->constraints_size;
-    
-    basis_indexes = IndexVector(problem->constraints_size);
-    non_basis_indexes = IndexVector(non_basis_size);
-
-    for (size_t i = 0; i < non_basis_size; i++)
-        non_basis_indexes[i] = i;
-    for (size_t i = 0; i < problem->constraints_size; i++)
-        basis_indexes[i] = i + non_basis_size;
-
-    std::cout << "Solver initialization : basis columns selected" << std::endl;
-
-    x = ValuesVector(problem->problem_size);
-    d = ValuesVector(problem->problem_size);    
-    AN = problem->A(non_basis_indexes);
-    B = problem->A(basis_indexes);
-    linalg::PFIdecompose(B, B_eta_repr);
-
-    std::cout << "Solver initialization : attributes setted" << std::endl;
-
-    // if (!linalg::checkPFIdecompose(B_eta_repr, B)) std::cerr << "Incorrect decompose" << std::endl;
-    std::cout << "Phase 1 : started" << std::endl;
-    while(presolve(presolver_method_name) == Phase1OutStatus::NeedRestart);
-    std::cout << "Phase 1 : ended" << std::endl;
-
-
-    for (auto i : non_basis_indexes)
-    {
-        switch (problem->bound_type[i])
-        {
-        case BoundaryType::Fixed:
-            x[i] = problem->lower_bound[i];
-            break;
-            
-        case BoundaryType::Free:
-            x[i] = 0;
-            break;
-
-        case BoundaryType::Boxed:
-            x[i] = (d[i] > 0) ? problem->lower_bound[i] : problem->upper_bound[i];
-            break;
-
-        case BoundaryType::Upper:
-            x[i] = problem->upper_bound[i];
-            break;
-
-        case BoundaryType::Lower:
-            x[i] = problem->lower_bound[i];
-            break;
-        }
-    }
-    
-}
-
-
-//----------------------------------------------------------------------------------------
-// Check if costs need perturbation to prevent cycling
-//----------------------------------------------------------------------------------------
-bool sequentialDualSimplex::checkPerturbNeed() const
-{
-    std::vector<double> unique_data;
-    for (double c_i : problem->costs)
-    {
-        bool new_c = true;
-        for (double uniq : unique_data)
-        {
-            if (fabs(c_i - uniq) < EPS_COSTS)
-            {
-                new_c = false;
-                break;
-            }            
-        }
-        if (new_c)
-           unique_data.push_back(c_i);
-    }
-    
-    return unique_data.size() < PERTURB_RATIO * problem->costs.getSize();
-
 }
 
 
@@ -319,7 +103,7 @@ bool sequentialDualSimplex::checkPerturbNeed() const
 // John J. Forrest and Donald Goldfarb. Steepest-edge simplex algorithms for
 // linear programming. Math. Program., 57(3):341–374, 1992.
 //----------------------------------------------------------------------------------------
-ValuesVector sequentialDualSimplex::initBetaWeights()
+ValuesVector SequentialDualSimplex::initBetaWeights()
 {
     ValuesVector beta(problem->constraints_size);
     for (size_t i = 0; i < problem->constraints_size; i++)
@@ -329,214 +113,12 @@ ValuesVector sequentialDualSimplex::initBetaWeights()
 
 
 //----------------------------------------------------------------------------------------
-//Perturb costs according to 
-// Dipl. Inform. Achim Koberstein. The Dual Simplex Method, Techniques for a fast and 
-// stable implementation: for a fast and stable implementation, November 2005
-//----------------------------------------------------------------------------------------
-void sequentialDualSimplex::perturbCosts()
-{
-    original_costs = problem->costs;
-    double magnitude;
-    double perturbation;
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dist(0.0, 1.0);
-
-    double min_perturb  = std::min(1e-2 * EPS_D, PSI);
-    double max_perturb  = std::max(1e+3 * EPS_D, PSI * 10 * problem->costs.mean());
-
-    for (size_t i = 0; i < problem->problem_size; i++)
-    {
-        magnitude = 100 * EPS_D + PSI * problem->costs[i];
-
-        if (problem->bound_type[i] != BoundaryType::Lower && problem->bound_type[i] != BoundaryType::Free)
-            perturbation = -0.5 * magnitude * (1 + dist(gen));
-        perturbation= 0.5 * magnitude * (1 + dist(gen));
-        
-        perturbation = getWeight(calcNonzeroInColumn(i)) * perturbation;
-
-        while (fabs(perturbation) > fabs(max_perturb) || fabs(perturbation) < fabs(min_perturb))
-        {
-            if (fabs(perturbation) > fabs(max_perturb))
-                perturbation = 0.1 * perturbation;
-            else if (fabs(perturbation) < fabs(min_perturb))
-                perturbation = 10 * perturbation;
-        }
-
-        problem->costs[i] += perturbation; 
-    }
-
-    perturbed = true;
-
-    std::cout << "-- Cost perturbation done" << std::endl;
-}
-
-
-//----------------------------------------------------------------------------------------
-// Weight for perturbation depends on two goals "keep nonzero count low" and 
-// "resolver degeneracy"
-//----------------------------------------------------------------------------------------
-double sequentialDualSimplex::getWeight(const size_t i) const
-{
-    std::vector<double> weights{0.01, 0.1, 1, 2, 5, 10, 20, 30, 40, 100};
-
-    size_t k;
-    if (i > 10)
-        k = 9;
-    else if (i == 0)
-        k = 0;
-    else
-        k = i - 1;
-
-    return weights[k];
-}
-
-
-//----------------------------------------------------------------------------------------
-// Calc non zero elements in column of matrix A
-//----------------------------------------------------------------------------------------
-size_t sequentialDualSimplex::calcNonzeroInColumn(const size_t i) const
-{
-    size_t non_zero_num = 0;
-    for (auto a_j : problem->A(i))
-        if (fabs(a_j) > EPS_A)
-            non_zero_num += 1;
-        
-    return non_zero_num;
-}
-
-
-//----------------------------------------------------------------------------------------
-// Check primal feasibility in solver
-//----------------------------------------------------------------------------------------
-bool sequentialDualSimplex::checkPrimalFeasible() const
-{
-    for (auto i : basis_indexes)
-    {
-        switch (problem->bound_type[i])
-        {
-        case BoundaryType::Fixed:
-            if (fabs(x[i] - problem->lower_bound[i]) > EPS_BOUND)
-                return false;
-            
-        case BoundaryType::Free:
-            break;
-
-        case BoundaryType::Boxed:
-            if (x[i] - problem->upper_bound[i] > EPS_BOUND || problem->lower_bound[i] - x[i] > EPS_BOUND)
-                return false;
-
-        case BoundaryType::Upper:
-            if (x[i] - problem->upper_bound[i] > EPS_BOUND)
-                return false;
-
-        case BoundaryType::Lower:
-            if (problem->lower_bound[i] - x[i] > EPS_BOUND)
-                return false;
-        }
-    }
-    return true;
-}
-
-
-
-//----------------------------------------------------------------------------------------
-// Check dual feasibility in solver
-//----------------------------------------------------------------------------------------
-bool sequentialDualSimplex::checkDualFeasible() const
-{
-    for (auto i : non_basis_indexes)
-    {
-        switch (problem->bound_type[i])
-        {
-        case BoundaryType::Free:
-            if (fabs(d[i]) < EPS_D || std::isnan(d[i]))
-                return false;
-            break;
-
-        case BoundaryType::Upper:
-            if (d[i] > EPS_D || std::isnan(d[i]))
-                return false;
-            break;
-
-        case BoundaryType::Lower:
-            if (d[i] < -EPS_D || std::isnan(d[i]))
-                return false;
-            break;
-        }
-    }
-    return true;
-}
-
-
-
-//----------------------------------------------------------------------------------------
-// Calc dual infeasibility 
-//----------------------------------------------------------------------------------------
-void sequentialDualSimplex::calcDualInfeasible()
-{
-    obj_func_val = 0;
-    for (auto i : non_basis_indexes)
-    {
-        switch (problem->bound_type[i])
-        {
-        case BoundaryType::Free:
-            if (d[i] != 0)
-                obj_func_val += d[i];
-            break;
-
-        case BoundaryType::Upper:
-            if (d[i] > 0)
-                obj_func_val -= d[i];
-            break;
-
-        case BoundaryType::Lower:
-            if (d[i] < 0)
-                obj_func_val += d[i];
-            break;
-        }
-    }
-}
-
-
-//----------------------------------------------------------------------------------------
-// COunt dual infeasibility 
-//----------------------------------------------------------------------------------------
-size_t sequentialDualSimplex::counterDualInfeasible() const
-{
-    size_t num = 0;
-    for (auto i : non_basis_indexes)
-    {
-        switch (problem->bound_type[i])
-        {
-        case BoundaryType::Free:
-            if (fabs(d[i]) < EPS_D)
-                num += 1;
-            break;
-
-        case BoundaryType::Upper:
-            if (d[i] > EPS_D)
-                num += 1;
-            break;
-
-        case BoundaryType::Lower:
-            if (d[i] < -EPS_D)
-                num += 1;
-            break;
-        }
-    }
-    return num;
-}
-
-
-//----------------------------------------------------------------------------------------
 // Phase 1 method for finding dual fesaible basis, based on article:
 // E. Kostina. The long step rule in the bounded-variable dual simplex method:
 // Numerical experiments. Mathematical Methods of Operations Research, 55:413–
 // 429, 2002.
 //----------------------------------------------------------------------------------------
-sequentialDualSimplex::Phase1OutStatus sequentialDualSimplex::minimizeDualInfeasibility()
+SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeasibility()
 {
     // (Step 1) Initialization
     Phase1OutStatus status;
@@ -774,7 +356,7 @@ sequentialDualSimplex::Phase1OutStatus sequentialDualSimplex::minimizeDualInfeas
 // a computational study. European Journal of Operations Research, 101(1):167–
 // 176, 1997.
 //----------------------------------------------------------------------------------------
-sequentialDualSimplex::Phase1OutStatus sequentialDualSimplex::panMathod()
+SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::panMathod()
 {
     // (Step 1) Initialization
     ValuesVector y(problem->constraints_size);
@@ -894,7 +476,7 @@ sequentialDualSimplex::Phase1OutStatus sequentialDualSimplex::panMathod()
 // Dipl. Inform. Achim Koberstein. The Dual Simplex Method, Techniques for a fast and 
 // stable implementation: for a fast and stable implementation, November 2005
 //----------------------------------------------------------------------------------------
-bool sequentialDualSimplex::elaboratedMethod()
+bool SequentialDualSimplex::elaboratedMethod()
 {
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -1135,7 +717,7 @@ bool sequentialDualSimplex::elaboratedMethod()
 // Dipl. Inform. Achim Koberstein. The Dual Simplex Method, Techniques for a fast and 
 // stable implementation: for a fast and stable implementation, November 2005
 //----------------------------------------------------------------------------------------
-bool sequentialDualSimplex::simpleRatioMethod()
+bool SequentialDualSimplex::simpleRatioMethod()
 {
     auto start = std::chrono::high_resolution_clock::now();
     // (Step 1) Initialization
