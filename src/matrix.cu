@@ -1,24 +1,75 @@
 #include "matrix.hpp"
 
 
+
+void Matrix::allocateMemory(size_t size)
+{
+    cudaMallocHost(&host_mem, size*sizeof(double));
+    cudaMalloc(&device_mem, size*sizeof(double));
+
+    cudaMemset(device_mem, 0, size*sizeof(double));
+    cudaMemset(host_mem, 0, size*sizeof(double));
+}
+
+
+void Matrix::freeMemory()
+{
+    cudaFree(device_mem);
+    cudaFreeHost(host_mem);
+    device_mem = nullptr;
+    host_mem = nullptr;
+}
+
+
+Matrix::~Matrix()
+{
+    freeMemory();
+}
+
+
+void Matrix::updateDeviceMem()
+{
+    cudaMemcpy(device_mem, host_mem, m*n*sizeof(double), cudaMemcpyDefault);
+}
+
+
+void Matrix::updateHostMem()
+{
+    cudaMemcpy(host_mem, device_mem, m*n*sizeof(double), cudaMemcpyDefault);
+}
+
+
 Matrix::Matrix(const size_t m, const size_t n)
 {
     this -> m = m;
     this -> n = n;
     if (m == n) size = m;
-    elem = std::vector<double>(n * m);
+    allocateMemory(n * m);
+    cudaMemset(host_mem, 0, n*m*sizeof(double));
+}
+
+
+Matrix::Matrix(const Matrix &matrix)
+{
+    this -> m = matrix.m;
+    this -> n = matrix.n;
+
+    allocateMemory(n * m);
+    cudaMemcpy(host_mem, matrix.host_mem, m*n*sizeof(double), cudaMemcpyHostToHost);
+
+    if (m == n) size = m;
 }
 
 
 double& Matrix::operator()(const size_t i, const size_t j)
 {
-    return elem[i * n + j];
+    return host_mem[i * n + j];
 }
 
 
 double Matrix::operator()(const size_t i, const size_t j) const
 {
-    return elem[i * n + j];
+    return host_mem[i * n + j];
 }
 
 
@@ -26,7 +77,7 @@ ValuesVector Matrix::operator()(const size_t p) const
 {
     ValuesVector new_vec(m);
     for (size_t i = 0; i < m; i++) 
-            new_vec[i] = this->operator()(i, p);
+        new_vec[i] = this->operator()(i, p);
     return new_vec;
 
 }
@@ -34,10 +85,19 @@ ValuesVector Matrix::operator()(const size_t p) const
 
 Matrix& Matrix::operator=(const Matrix &matrix)
 {
+    if (this == &matrix) {
+        return *this;
+    }
+   
     this -> m = matrix.m;
     this -> n = matrix.n;
-    this -> elem = matrix.elem;
+
+    if (host_mem != nullptr) freeMemory();
+    allocateMemory(n * m);
+    cudaMemcpy(host_mem, matrix.host_mem, m*n*sizeof(double), cudaMemcpyHostToHost);
+
     if (m == n) size = m;
+
     return *this;
 }
 
@@ -72,22 +132,22 @@ Matrix Matrix::T() const
 
 ValuesVector Matrix::dot(const ValuesVector &vector, bool transpose)
 {
+    updateDeviceMem();
+    vector.updateDeviceMem();
     if (transpose)
     {
         ValuesVector new_vec(n);
-        for (size_t i = 0; i < m; i++) {
-            for (size_t j = 0; j < n; j++)
-                new_vec[j] += this->operator()(i, j) * vector[i];
-        }
+        matrixDotTKernel<<<BLOCKS_NUM, BLOCK_DIM>>>(device_mem, vector.device_mem, new_vec.device_mem, m, n);
+        cudaDeviceSynchronize(); 
+        new_vec.updateHostMem();
         return new_vec;
     }
     else
     {
         ValuesVector new_vec(m);
-        for (size_t i = 0; i < m; i++) {
-            for (size_t j = 0; j < n; j++)
-                new_vec[i] += this->operator()(i, j) * vector[j];
-        }
+        matrixDotKernel<<<BLOCKS_NUM, BLOCK_DIM>>>(device_mem, vector.device_mem, new_vec.device_mem, m, n);
+        cudaDeviceSynchronize(); 
+        new_vec.updateHostMem();
         return new_vec;
     }
 }

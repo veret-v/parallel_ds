@@ -34,9 +34,8 @@
 #define PSI           1e-5
 #define CAND_RATIO    0.95
 #define MAX_CYCLE     5
-#define REFACT_FREQ   50
+#define REFACT_FREQ   200
 
-#define DEBUG
 
 class ParallelDualSimplex : public BaseDualSimplex
 {

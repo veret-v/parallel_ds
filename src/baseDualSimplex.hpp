@@ -29,8 +29,9 @@
 
 #define PERTURB_RATIO 0.25
 #define PSI           1e-5
+#define RESTART_CYCLE 1000
 
-#define DEBUG
+// #define DEBUG
 
 
 class BaseDualSimplex
@@ -81,6 +82,8 @@ protected:
     size_t counterDualInfeasible() const;
 
     void perturbCosts();
+    void initDualSimplex();
+    void randomBasis();
 
     bool checkPrimalFeasible() const;
     bool checkDualFeasible()   const;

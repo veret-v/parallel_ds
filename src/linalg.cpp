@@ -84,7 +84,7 @@ bool linalg::PFIdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed)
             ValuesVector bs_eta_matrix_val(m);
             bs_eta_matrix_val[swap_id] = -1; 
             ValuesVector sgn_eta_matrix_val(m);
-            bs_eta_matrix_val[swap_id] = -1; 
+            sgn_eta_matrix_val[swap_id] = -1; 
             
             for (size_t k = 0; k < m; k++)
             {
@@ -158,8 +158,8 @@ bool linalg::LUdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed)
     Matrix per_rows(m, m);
     Matrix per_cols(m, m);
     std::vector<EtaMatrix> L;
-    std::unordered_set<size_t> P(m);
-    std::unordered_set<size_t>  Q(m);
+    std::unordered_set<size_t> P;
+    std::unordered_set<size_t> Q;
 
     for (size_t i = 0; i < m; i++)
     {

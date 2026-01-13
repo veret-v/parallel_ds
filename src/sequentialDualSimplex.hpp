@@ -31,10 +31,7 @@
 #define PERTURB_RATIO 0.25
 #define PSI           1e-5
 #define MAX_CYCLE     5
-#define REFACT_FREQ   50
-
-#define DEBUG
-
+#define REFACT_FREQ   200
 
 
 class SequentialDualSimplex : public BaseDualSimplex
@@ -60,4 +57,5 @@ public:
     using BaseDualSimplex::BaseDualSimplex;
 
 };
+
 

@@ -115,8 +115,8 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
     Phase1OutStatus status;
     ValuesVector y(problem->constraints_size);
     y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-    d.setValues(problem->costs(non_basis_indexes) - AN.T().dot(y), non_basis_indexes);
-
+    d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
+    
     IndexVector inf_u_indexes;
     IndexVector inf_l_indexes;
     IndexVector inf_f_indexes;
@@ -133,7 +133,6 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
         if (problem->bound_type[j] == BoundaryType::Free && d[j] < -EPS_D)
             inf_f_indexes.push_back(i);
     }
-    
     obj_func_val = 0;
     ValuesVector columns_change(problem->constraints_size);
     for (auto i : inf_l_indexes)
@@ -150,10 +149,9 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
 
     ValuesVector f(problem->constraints_size);
     f = linalg::PFIsolve(B_eta_repr, columns_change, false);
-
+    
     ValuesVector beta(problem->constraints_size);
     beta = initBetaWeights();
-    
     size_t iteration = 0;
     size_t cycle_num = 0;
 
@@ -166,12 +164,19 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
     while (true)
     {
         iteration += 1;
+
         if (!perturbed && cycle_num > MAX_CYCLE) 
         {
             perturbCosts();
             y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-            d.setValues(problem->costs(non_basis_indexes) - AN.T().dot(y), non_basis_indexes);
+            d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
         }
+
+        // if (cycle_num > RESTART_CYCLE)
+        // {
+        //     status = Phase1OutStatus::NeedRestart;
+        //     break;
+        // }
         
         // (Step 2) Pricing
         size_t p, p_idx;
@@ -215,7 +220,7 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
         
         // (Step 4) Pivot row
          ValuesVector alpha(non_basis_size);
-        alpha = AN.T().dot(rho);
+        alpha = AN.dot(rho, true);
 
         // (Step 5) Ratio Test
         ValuesVector alpha_tmp(non_basis_size);
@@ -293,6 +298,7 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
 
         // (Step 7) Basis change and update
         obj_func_val = obj_func_val - theta * f[p_idx];
+        double step = theta * f[p_idx];
         for (size_t i = 0; i < non_basis_indexes.size(); i++)
         {
             size_t j = non_basis_indexes[i];
@@ -329,12 +335,15 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
         }
 
         calcDualInfeasible();
-        if (fabs(theta) < EPS_A) cycle_num += 1;
+        if (fabs(theta) < EPS_A) 
+            cycle_num += 1;
+        else
+            cycle_num = 0;
 
         #ifdef DEBUG
-        std::cout << iteration << " : Z = "<< obj_func_val << " p = " << p << " q = " << q << " inf_num = " << counterDualInfeasible() << std::endl;  
+        std::cout << iteration << " : Z = "<< obj_func_val << " inf_num = " << counterDualInfeasible() << std::endl;  
         #endif
-
+        
         // if (!linalg::checkPFIdecompose(B_eta_repr, B)) std::cerr << "Incorrect decompose" << std::endl;
     }
     return status;
@@ -348,16 +357,14 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
 //----------------------------------------------------------------------------------------
 bool ParallelDualSimplex::elaboratedMethod()
 {
-    auto start = std::chrono::high_resolution_clock::now();
-
     // (Step 1) Initialization
     ValuesVector y(problem->constraints_size);
     ValuesVector beta(problem->constraints_size);
 
-    problem->RHS = problem->RHS - AN.dot(x(non_basis_indexes));
+    problem->RHS = problem->RHS - AN.dot(x(non_basis_indexes), false);
     x.setValues(linalg::PFIsolve(B_eta_repr, problem->RHS, false), basis_indexes);
     y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-    d.setValues(problem->costs(non_basis_indexes) - AN.T().dot(y), non_basis_indexes);
+    d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
     obj_func_val = problem->costs.dot(x);
     beta = initBetaWeights();
     size_t iteration = 0;
@@ -370,7 +377,7 @@ bool ParallelDualSimplex::elaboratedMethod()
         {
             perturbCosts();
             y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-            d.setValues(problem->costs(non_basis_indexes) - AN.T().dot(y), non_basis_indexes);
+            d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
             obj_func_val = problem->costs.dot(x);
         }
 
@@ -418,7 +425,7 @@ bool ParallelDualSimplex::elaboratedMethod()
         std::vector<ValuesVector> candidate_x(candidates_num);
         std::vector<ValuesVector> candidate_d(candidates_num);
 
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic, 1)
         for (size_t cand_id = 0; cand_id < candidates_num; cand_id++)
         {
             size_t p_idx = pivot_candidats[cand_id];
@@ -433,7 +440,7 @@ bool ParallelDualSimplex::elaboratedMethod()
 
             // (Step 4) Pivot row
             ValuesVector alpha_p(non_basis_size);
-            alpha_p = AN.T().dot(rho);
+            alpha_p = AN.dot(rho, true);
 
             // (Step 5) Ratio Test
             ValuesVector tmp_alpha_p(non_basis_size);
@@ -605,10 +612,7 @@ bool ParallelDualSimplex::elaboratedMethod()
         iteration += 1;
         if (fabs(Z_deltas[opt_cand_id]) < EPS_A) cycle_num += 1;
     }
-
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration_ns = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << "Time spent: " << duration_ns.count() << " ms\n";
+    std::cout << "iterations = " << iteration << std::endl;
     return solution.solved;
 }
 

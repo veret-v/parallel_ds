@@ -124,8 +124,8 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
     Phase1OutStatus status;
     ValuesVector y(problem->constraints_size);
     y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-    d.setValues(problem->costs(non_basis_indexes) - AN.T().dot(y), non_basis_indexes);
-
+    d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
+    
     IndexVector inf_u_indexes;
     IndexVector inf_l_indexes;
     IndexVector inf_f_indexes;
@@ -179,12 +179,20 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
         {
             perturbCosts();
             y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-            d.setValues(problem->costs(non_basis_indexes) - AN.T().dot(y), non_basis_indexes);
+            d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
         }
+
+        // if (cycle_num > RESTART_CYCLE)
+        // {
+        //     status = Phase1OutStatus::NeedRestart;
+        //     break;
+        // }
+        
         
         // (Step 2) Pricing
         size_t p, p_idx;
         double max_weight = 0;
+        bool no_candidates =true;
         for (size_t i = 0; i < problem->constraints_size; i++)
         {
             size_t j = basis_indexes[i];
@@ -194,6 +202,7 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
                 double weight_tmp = pow(f[i], 2) / beta[i];
                 if (weight_tmp > max_weight && blocked_p.find(j) == blocked_p.end())
                 {
+                    no_candidates = false;
                     p = j;
                     p_idx = i;
                     max_weight = weight_tmp;
@@ -202,7 +211,7 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
             
         }
 
-        if (checkDualFeasible())
+        if (checkDualFeasible() || no_candidates)
         {
             calcDualInfeasible();
             if (obj_func_val == 0)
@@ -223,8 +232,8 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
         rho = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, p_idx), true);
         
         // (Step 4) Pivot row
-         ValuesVector alpha(non_basis_size);
-        alpha = AN.T().dot(rho);
+        ValuesVector alpha(non_basis_size);
+        alpha = AN.dot(rho, true);
 
         // (Step 5) Ratio Test
         ValuesVector alpha_tmp(non_basis_size);
@@ -338,10 +347,13 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
         }
 
         calcDualInfeasible();
-        if (fabs(theta) < EPS_A) cycle_num += 1;
+        if (fabs(theta) < EPS_A) 
+            cycle_num += 1;
+        else
+            cycle_num = 0;
 
         #ifdef DEBUG
-        std::cout << iteration << " : Z = "<< obj_func_val << " p = " << p << " q = " << q << " inf_num = " << counterDualInfeasible() << std::endl;  
+        std::cout << iteration << " : Z = "<< obj_func_val << " inf_num = " << counterDualInfeasible() << " p = " << p << " q = " << q << std::endl;  
         #endif
 
         // if (!linalg::checkPFIdecompose(B_eta_repr, B)) std::cerr << "Incorrect decompose" << std::endl;
@@ -361,7 +373,7 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::panMathod()
     // (Step 1) Initialization
     ValuesVector y(problem->constraints_size);
     y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-    d.setValues(problem->costs(non_basis_indexes) - AN.T().dot(y), non_basis_indexes);
+    d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
     Phase1OutStatus status;
 
     while (true)
@@ -442,7 +454,7 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::panMathod()
 
         // (Step 6) Pivot row
         ValuesVector alpha(non_basis_size);
-        alpha = AN.T().dot(rho);
+        alpha = AN.dot(rho, true);
 
         double  theta = d[q] / alpha[q_idx];
 
@@ -478,16 +490,16 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::panMathod()
 //----------------------------------------------------------------------------------------
 bool SequentialDualSimplex::elaboratedMethod()
 {
-    auto start = std::chrono::high_resolution_clock::now();
+    
 
     // (Step 1) Initialization
     ValuesVector y(problem->constraints_size);
     ValuesVector beta(problem->constraints_size);
 
-    problem->RHS = problem->RHS - AN.dot(x(non_basis_indexes));
+    problem->RHS = problem->RHS - AN.dot(x(non_basis_indexes), false);
     x.setValues(linalg::PFIsolve(B_eta_repr, problem->RHS, false), basis_indexes);
     y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-    d.setValues(problem->costs(non_basis_indexes) - AN.T().dot(y), non_basis_indexes);
+    d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
     obj_func_val = problem->costs.dot(x);
     beta = initBetaWeights();
     size_t iteration = 0;
@@ -499,7 +511,7 @@ bool SequentialDualSimplex::elaboratedMethod()
         {
             perturbCosts();
             y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-            d.setValues(problem->costs(non_basis_indexes) - AN.T().dot(y), non_basis_indexes);
+            d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
             obj_func_val = problem->costs.dot(x);
         }
         #ifdef DEBUG
@@ -561,7 +573,7 @@ bool SequentialDualSimplex::elaboratedMethod()
 
         // (Step 4) Pivot row
         ValuesVector alpha_p(non_basis_size);
-        alpha_p = AN.T().dot(rho);
+        alpha_p = AN.dot(rho, true);
 
         // (Step 5) Ratio Test
         ValuesVector tmp_alpha_p(non_basis_size);
@@ -705,9 +717,7 @@ bool SequentialDualSimplex::elaboratedMethod()
         iteration += 1;
         if (fabs(theta) < EPS_A) cycle_num += 1;
     }
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration_ns = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << "Time spent: " << duration_ns.count() << " ms\n";
+    std::cout << "iterations = " << iteration << std::endl;
     return solution.solved;
 }
 
@@ -723,9 +733,14 @@ bool SequentialDualSimplex::simpleRatioMethod()
     // (Step 1) Initialization
     ValuesVector y(problem->constraints_size);
 
-    x.setValues(linalg::PFIsolve(B_eta_repr, problem->RHS - AN.dot(x(non_basis_indexes)), false), basis_indexes);
+    AN.dot(x(non_basis_indexes), false).show();
+    AN.dot(x(non_basis_indexes), false).show();
+    AN.dot(x(non_basis_indexes), false).show();
+    AN.dot(x(non_basis_indexes), false).show();
+    // (problem->RHS - AN.dot(x(non_basis_indexes), false)).show();
+    x.setValues(linalg::PFIsolve(B_eta_repr, problem->RHS - AN.dot(x(non_basis_indexes), false), false), basis_indexes);
     y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-    d.setValues(problem->costs(non_basis_indexes) - AN.T().dot(y), non_basis_indexes);
+    d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
     obj_func_val = problem->costs.dot(x);
 
     size_t iteration = 0;
@@ -777,7 +792,7 @@ bool SequentialDualSimplex::simpleRatioMethod()
        
         // (Step 4) Pivot row
         ValuesVector alpha_p(non_basis_size);
-        alpha_p = AN.T().dot(rho);
+        alpha_p = AN.dot(rho, true);
 
         // (Step 5) Ratio Test
         ValuesVector tmp_alpha_p(non_basis_size);
@@ -856,8 +871,6 @@ bool SequentialDualSimplex::simpleRatioMethod()
 
         iteration += 1;
     }
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration_ns = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << "Time spent: " << duration_ns.count() << " ms\n";
+   
     return solution.solved;
 }

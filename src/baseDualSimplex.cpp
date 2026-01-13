@@ -61,9 +61,14 @@ BaseDualSimplex::Phase1OutStatus BaseDualSimplex::presolve(const std::string& pr
     if (checkPerturbNeed())
         perturbCosts();
 
-    Phase1OutStatus status = Phase1OutStatus::NeedRestart;
+    Phase1OutStatus status = callPresolver(method);
     while(status == Phase1OutStatus::NeedRestart)
+    {
+        std::cout << "-- Restart with new random basis" << std::endl;
+        randomBasis();
+        initDualSimplex();
         status = callPresolver(method);
+    }
     
     if (status == Phase1OutStatus::DualInfeas)
     {
@@ -152,15 +157,24 @@ LPsolution BaseDualSimplex::solve(const std::string& method_name)
     std::cout << "Phase 2 : started" << std::endl;
 
     auto method = stringToSolverMethod(method_name);
+
+    auto start = std::chrono::high_resolution_clock::now();
+
     bool status_code = callDualSolver(method);
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "time = " << duration_ms << std::endl;
+    solution.phase2_time = static_cast<size_t>(duration_ms);
+    solution.phase2_time = 0;
+    
     
     if (status_code && perturbed) // optimal solution case
     {
         std::cout << "-- Optimal solution obtained with perturbation" << std::endl;
 
         problem->costs = original_costs;
-        perturbed = false;
-
+       
         if (!checkPrimalFeasible() && checkDualFeasible()) 
         {
             callDualSolver(method);
@@ -176,6 +190,12 @@ LPsolution BaseDualSimplex::solve(const std::string& method_name)
         else if (!checkPrimalFeasible() && !checkDualFeasible())
         {
             Phase1OutStatus status_code = callPresolver(presolver_method);
+            while (status_code == Phase1OutStatus::NeedRestart)
+            {    
+                std::cout << "-- Restart phase 1" << std::endl;
+                status_code = callPresolver(presolver_method);
+            }
+
             if (status_code == Phase1OutStatus::Solved)
                 callDualSolver(method);
 
@@ -192,12 +212,17 @@ LPsolution BaseDualSimplex::solve(const std::string& method_name)
     }
     else if (!status_code && perturbed) // dual unbound case
     {
-        std::cout << "-- Optimal unbounded solution obtained with perturbation" << std::endl;
+        std::cout << "-- Unbounded solution obtained with perturbation" << std::endl;
 
         problem->costs = original_costs;
-        perturbed = false;
-
+        
         Phase1OutStatus status_code = callPresolver(presolver_method);
+        while (status_code == Phase1OutStatus::NeedRestart)
+        {    
+            std::cout << "-- Restart phase 1" << std::endl;
+            status_code = callPresolver(presolver_method);
+        }
+
         if (status_code == Phase1OutStatus::Solved)
             callDualSolver(method);
 
@@ -246,14 +271,41 @@ BaseDualSimplex::BaseDualSimplex(Problem& _problem)
 
     std::cout << "Solver initialization : basis columns selected" << std::endl;
 
+    initDualSimplex();
+
+    std::cout << "Solver initialization : attributes setted" << std::endl;    
+    
+}
+
+
+//----------------------------------------------------------------------------------------
+// Init params, setting data according to index arrays
+//----------------------------------------------------------------------------------------
+void BaseDualSimplex::initDualSimplex()
+{
     x = ValuesVector(problem->problem_size);
     d = ValuesVector(problem->problem_size);    
     AN = problem->A(non_basis_indexes);
     B = problem->A(basis_indexes);
+    B_eta_repr.clear();
     linalg::PFIdecompose(B, B_eta_repr);
+}
 
-    std::cout << "Solver initialization : attributes setted" << std::endl;    
-    
+
+//----------------------------------------------------------------------------------------
+// Set random basis
+//----------------------------------------------------------------------------------------
+void BaseDualSimplex::randomBasis()
+{
+    IndexVector all_indexes(problem->problem_size);
+    std::iota(all_indexes.begin(), all_indexes.end(), 0);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::shuffle(all_indexes.begin(), all_indexes.end(), gen);
+
+    basis_indexes = IndexVector(all_indexes.begin(), all_indexes.begin() + problem->constraints_size);
+    non_basis_indexes = IndexVector(all_indexes.begin() + problem->constraints_size, all_indexes.end());
 }
 
 
