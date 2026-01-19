@@ -13,9 +13,9 @@
 #include <algorithm>
 
 #include "problem.hpp"
-#include "linalg.hpp"
-#include "valuesVector.hpp"
-#include "matrix.hpp"
+#include "./cpu_version/linalg.hpp"
+#include "./cpu_version/valuesVector.hpp"
+#include "./cpu_version/matrix.hpp"
 #include "types.hpp"
 #include "LPsolution.hpp"
 
@@ -64,7 +64,6 @@ protected:
     IndexVector basis_indexes;
     IndexVector non_basis_indexes;
 
-    std::vector<EtaMatrix> B_eta_repr;
     Matrix B;
     Matrix AN;
 
@@ -78,11 +77,12 @@ protected:
     virtual bool callDualSolver(const SolverMethods method);
     virtual bool callPrimalSolver();
 
+    virtual void initDualSimplex();
+
     void calcDualInfeasible();
     size_t counterDualInfeasible() const;
 
     void perturbCosts();
-    void initDualSimplex();
     void randomBasis();
 
     bool checkPrimalFeasible() const;

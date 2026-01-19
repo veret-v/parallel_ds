@@ -13,9 +13,9 @@
 #include <algorithm>
 
 #include "problem.hpp"
-#include "linalg.hpp"
-#include "valuesVector.hpp"
-#include "matrix.hpp"
+#include "./cpu_version/linalg.hpp"
+#include "./cpu_version/valuesVector.hpp"
+#include "./cpu_version/matrix.hpp"
 #include "types.hpp"
 
 

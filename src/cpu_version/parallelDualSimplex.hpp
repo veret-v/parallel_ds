@@ -14,13 +14,13 @@
 
 #include <omp.h>
 
-#include "problem.hpp"
+#include "../problem.hpp"
 #include "linalg.hpp"
 #include "valuesVector.hpp"
 #include "matrix.hpp"
-#include "types.hpp"
-#include "LPsolution.hpp"
-#include "baseDualSimplex.hpp"
+#include "../types.hpp"
+#include "../LPsolution.hpp"
+#include "../baseDualSimplex.hpp"
 
 #define EPS_BOUND 1e-10
 #define EPS_ALPHA 1e-8
@@ -40,6 +40,9 @@
 class ParallelDualSimplex : public BaseDualSimplex
 {
 protected:
+    std::vector<EtaMatrix> B_eta_repr;
+
+    void initDualSimplex() override;
    
     SolverMethods    stringToSolverMethod(const std::string& method_name) override;
     PresolverMethods stringToPreSolverMethod(const std::string& method_name) override;

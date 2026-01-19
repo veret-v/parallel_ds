@@ -1,5 +1,18 @@
 #include "parallelDualSimplex.hpp"
 
+//----------------------------------------------------------------------------------------
+// Init params, setting data according to index arrays
+//----------------------------------------------------------------------------------------
+void ParallelDualSimplex::initDualSimplex()
+{
+    x = ValuesVector(problem->problem_size);
+    d = ValuesVector(problem->problem_size);    
+    AN = problem->A(non_basis_indexes);
+    B = problem->A(basis_indexes);
+    B_eta_repr.clear();
+    linalg::PFIdecompose(B, B_eta_repr);
+}
+
 
 //----------------------------------------------------------------------------------------
 // Convert string to exiting methods for presolver
@@ -344,7 +357,6 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
         std::cout << iteration << " : Z = "<< obj_func_val << " inf_num = " << counterDualInfeasible() << std::endl;  
         #endif
         
-        // if (!linalg::checkPFIdecompose(B_eta_repr, B)) std::cerr << "Incorrect decompose" << std::endl;
     }
     return status;
 }

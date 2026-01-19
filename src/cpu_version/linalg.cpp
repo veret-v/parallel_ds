@@ -1,16 +1,6 @@
 #include "linalg.hpp"
 
 
-
-Matrix linalg::ones(const size_t n)
-{
-    Matrix ones(n, n);
-    for (size_t i = 0; i < n; i++)
-        ones(i, i) = 1;
-    return ones;
-}
-
-
 ValuesVector linalg::unit(const size_t size, const size_t p)
 {
     ValuesVector new_vec(size);
@@ -54,6 +44,7 @@ ValuesVector linalg::PFIsolve(const std::vector<EtaMatrix>& A, const ValuesVecto
 bool linalg::PFIdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed)
 {
     Matrix buff_A(A);
+    buff_A.genCSRorder();
     size_t m = std::get<0>(buff_A.getSize());
     bool is_identity;
 
@@ -86,11 +77,7 @@ bool linalg::PFIdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed)
             ValuesVector sgn_eta_matrix_val(m);
             sgn_eta_matrix_val[swap_id] = -1; 
             
-            for (size_t k = 0; k < m; k++)
-            {
-                buff_A(i, k) = buff_A(i, k) + buff_A(swap_id, k);
-                buff_A(swap_id, k) = -buff_A(swap_id, k) + buff_A(i, k);
-            }
+            buff_A.swapRows(i, swap_id);
             
             decomposed.push_back(EtaMatrix(fs_eta_matrix_val, swap_id));
             decomposed.push_back(EtaMatrix(bs_eta_matrix_val, i));    
@@ -98,50 +85,14 @@ bool linalg::PFIdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed)
         }
        
         ValuesVector eta_matrix_val(m);
-        Matrix new_buff_A(buff_A);
         for (size_t j = 0; j < m; j++)
-        { 
             eta_matrix_val[j] = (j != i) ? - buff_A(j, i) / buff_A(i, i) : 1 / buff_A(i, i); 
-            for (size_t k = 0; k < m; k++)
-                new_buff_A(j, k) = (j != i) ? buff_A(j, k) + buff_A(i, k) * eta_matrix_val[j] : buff_A(i, k) * eta_matrix_val[j];
-        }   
-        buff_A = new_buff_A;
-        decomposed.push_back(EtaMatrix(eta_matrix_val, i));
+        EtaMatrix eta = EtaMatrix(eta_matrix_val, i);
+        
+        decomposed.push_back(eta);
+        buff_A.dotEtaMatrix(eta);
     }
     return true;
-}
-
-
-bool linalg::checkPFIdecompose(const std::vector<EtaMatrix>& B_eta_repr, const Matrix& B)
-{
-    Matrix buff_B(B);
-    auto start = B_eta_repr.begin();
-    auto end = B_eta_repr.end();
-
-    size_t m = std::get<1>(B.getSize());
-    for(start; start != end; start += 1)
-        dotEtaMatrix(*start, buff_B);
-       
-    for (size_t i = 0; i < m; i++)
-    {
-        for (size_t j= 0; j < m; j++)
-            if (!(buff_B(i, j) == 0 && i != j || buff_B(i, j) == 1 && i == j )) return  false;
-    }
-    return true;
-}
-
-
-void linalg::dotEtaMatrix(const EtaMatrix& eta_matrix, Matrix& matrix)
-{
-    size_t m = std::get<1>(matrix.getSize());
-    size_t k = std::get<1>(eta_matrix);
-    ValuesVector eta_val =  std::get<0>(eta_matrix);
-    for (size_t i = 0; i < m; i++)
-    {
-        for (size_t j= 0; j < m; j++)
-            matrix(i, j) = (i != k) ? matrix(i, j) + matrix(k, j) * eta_val[i] : matrix(k, j) * eta_val[i];
-    }
-    matrix.show();
 }
 
 

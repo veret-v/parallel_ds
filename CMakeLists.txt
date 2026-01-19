@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmakeFindModules")
 
 option(BUILD_TESTS "Build tests" ON)
-option(WITH_CUDA "Build with CUDA support" ON)
+option(WITH_CUDA "Build with CUDA support" OFF)
 
 # testing
 enable_testing()
@@ -45,7 +45,11 @@ if(WITH_CUDA)
 
     target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_CUDA)
 
-    target_link_libraries(${PROJECT_NAME} CUDA::cudart rt pthread dl)
+    target_link_libraries(${PROJECT_NAME} 
+        CUDA::cudart 
+        CUDA::cusolver
+        CUDA::cublas 
+        pthread dl)
     
     set_target_properties(${PROJECT_NAME} PROPERTIES
         CUDA_ARCHITECTURES "native" 

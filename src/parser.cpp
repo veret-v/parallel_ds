@@ -11,12 +11,9 @@ int LPparser::readMps(const std::string& filename, Problem& problem)
         CoinPackedMatrix coeffs = *mps_reader.getMatrixByCol();
         int rows_num = coeffs.getNumRows();
         int cols_num = coeffs.getNumCols();
-        Matrix A(rows_num, cols_num);
-        
-        for (size_t i = 0; i < coeffs.getNumRows(); i++)
-            for (size_t j = 0; j < coeffs.getNumCols(); j++)
-                A(i, j) = coeffs.getCoefficient(i, j);
 
+        Matrix A(coeffs);
+       
         const double* lower_range_parsed  = mps_reader.getRowLower();
         const double* upper_range_parsed  = mps_reader.getRowUpper();
         const char*   types_parsed  = mps_reader.getRowSense();

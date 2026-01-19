@@ -7,9 +7,9 @@
 #include <cmath>
 #include <unordered_map>
 
-#include "linalg.hpp"
-#include "valuesVector.hpp"
-#include "matrix.hpp"
+#include "./cpu_version/linalg.hpp"
+#include "./cpu_version/valuesVector.hpp"
+#include "./cpu_version/matrix.hpp"
 #include "types.hpp"
 
 
@@ -19,6 +19,7 @@
 class SequentialDualSimplex;
 class ParallelDualSimplex;
 class BaseDualSimplex;
+class CudaDualSimplex;
 class LPparser;
 
 
@@ -28,6 +29,7 @@ class Problem
 friend class SequentialDualSimplex;
 friend class ParallelDualSimplex;
 friend class BaseDualSimplex;
+friend class CudaDualSimplex;
 friend class LPparser;
 
 private:

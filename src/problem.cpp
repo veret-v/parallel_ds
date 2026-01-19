@@ -55,7 +55,7 @@ void Problem::transformToComputeForm(
 {
     size_t m = std::get<0>(A.getSize());
     size_t n = std::get<1>(A.getSize());
-    A = A.stackColumns(linalg::ones(m));
+    A.stackColUnitMatrix();
 
     for (size_t i = 0; i < m; i++)
     {
@@ -90,9 +90,8 @@ void Problem::checkConstraints()
 {
     size_t m = std::get<0>(A.getSize());
     size_t n = std::get<1>(A.getSize());
-    size_t rank = A.rank();
 
-    if (m != rank || m > n)
+    if (m > n)
     {
         throw "Incorrect constraint size";
         exit(1);

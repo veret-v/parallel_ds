@@ -2,11 +2,11 @@
 
 #include <filesystem>
 
-#include "valuesVector.hpp"
-#include "matrix.hpp"
+#include "./cpu_version/valuesVector.hpp"
+#include "./cpu_version/matrix.hpp"
 #include "problem.hpp"
-#include "sequentialDualSimplex.hpp"
-#include "parallelDualSimplex.hpp"
+#include "./cpu_version/sequentialDualSimplex.hpp"
+#include "./cpu_version/parallelDualSimplex.hpp"
 #include "parser.hpp"
 
 namespace fs = std::filesystem;

@@ -283,12 +283,6 @@ BaseDualSimplex::BaseDualSimplex(Problem& _problem)
 //----------------------------------------------------------------------------------------
 void BaseDualSimplex::initDualSimplex()
 {
-    x = ValuesVector(problem->problem_size);
-    d = ValuesVector(problem->problem_size);    
-    AN = problem->A(non_basis_indexes);
-    B = problem->A(basis_indexes);
-    B_eta_repr.clear();
-    linalg::PFIdecompose(B, B_eta_repr);
 }
 
 

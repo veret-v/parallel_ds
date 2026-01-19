@@ -12,13 +12,13 @@
 #include <queue>
 #include <algorithm>
 
-#include "problem.hpp"
+#include "../problem.hpp"
 #include "linalg.hpp"
 #include "valuesVector.hpp"
 #include "matrix.hpp"
-#include "types.hpp"
-#include "LPsolution.hpp"
-#include "baseDualSimplex.hpp"
+#include "../types.hpp"
+#include "../LPsolution.hpp"
+#include "../baseDualSimplex.hpp"
 
 #define EPS_BOUND 1e-10
 #define EPS_ALPHA 1e-8
@@ -37,6 +37,9 @@
 class SequentialDualSimplex : public BaseDualSimplex
 {
 protected:
+    std::vector<EtaMatrix> B_eta_repr;
+
+    void initDualSimplex() override;
 
     Phase1OutStatus callPresolver(const PresolverMethods method) override;
     bool callDualSolver(const SolverMethods method) override;

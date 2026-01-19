@@ -2,6 +2,20 @@
 
 
 //----------------------------------------------------------------------------------------
+// Init params, setting data according to index arrays
+//----------------------------------------------------------------------------------------
+void SequentialDualSimplex::initDualSimplex()
+{
+    x = ValuesVector(problem->problem_size);
+    d = ValuesVector(problem->problem_size);    
+    AN = problem->A(non_basis_indexes);
+    B = problem->A(basis_indexes);
+    B_eta_repr.clear();
+    linalg::PFIdecompose(B, B_eta_repr);
+}
+
+
+//----------------------------------------------------------------------------------------
 // Convert string to exiting methods for presolver
 //----------------------------------------------------------------------------------------
 PresolverMethods SequentialDualSimplex::stringToPreSolverMethod(
@@ -355,8 +369,6 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
         #ifdef DEBUG
         std::cout << iteration << " : Z = "<< obj_func_val << " inf_num = " << counterDualInfeasible() << " p = " << p << " q = " << q << std::endl;  
         #endif
-
-        // if (!linalg::checkPFIdecompose(B_eta_repr, B)) std::cerr << "Incorrect decompose" << std::endl;
     }
     return status;
 }
@@ -477,7 +489,6 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::panMathod()
         B.swapColumn(AN, p_idx, q_idx);
         B_eta_repr.push_back(EtaMatrix(new_eta_matrix, p_idx));
 
-        // if (!linalg::checkPFIdecompose(B_eta_repr, B)) std::cerr << "Incorrect decompose" << std::endl;
     }
     return status;
 }
