@@ -393,6 +393,7 @@ void LUfactor::solve(
          sol.device_values, sol.size, 
          rhs.device_values, rhs.size
     );
+    cusolverRfSolve
 }
 
 

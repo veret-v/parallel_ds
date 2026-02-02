@@ -17,7 +17,8 @@
 
 #include "utillities.hpp"
 #include "cudaDenseVector.hpp"
-#include "../types.hpp"
+
+#include "../common/types.hpp"
 
 #define SING_EPS 1e-12
 

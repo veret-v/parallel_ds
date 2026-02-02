@@ -13,11 +13,12 @@
 #include <algorithm>
 
 #include "problem.hpp"
-#include "./cpu_version/linalg.hpp"
-#include "./cpu_version/valuesVector.hpp"
-#include "./cpu_version/matrix.hpp"
 #include "types.hpp"
 #include "LPsolution.hpp"
+
+#include "../cpu/linalg.hpp"
+#include "../cpu/valuesVector.hpp"
+#include "../cpu/matrix.hpp"
 
 #define EPS_BOUND 1e-10
 #define EPS_ALPHA 1e-8

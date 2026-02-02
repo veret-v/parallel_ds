@@ -1,10 +1,11 @@
 #include <gtest/gtest.h>
 
-#include "../src/valuesVector.hpp"
-#include "../src/matrix.hpp"
-#include "../src/problem.hpp"
-#include "../src/sequentialDualSimplex.hpp"
-#include "../src/parser.hpp"
+#include "../src/cpu/valuesVector.hpp"
+#include "../src/cpu/matrix.hpp"
+#include "../src/cpu/sequentialDualSimplex.hpp"
+
+#include "../src/common/problem.hpp"
+#include "../src/common/parser.hpp"
 
 
 TEST(DualSimplexSimple, Test1)

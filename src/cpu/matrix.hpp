@@ -5,7 +5,8 @@
 #include <iostream> 
 
 #include "valuesVector.hpp"
-#include "../types.hpp"
+
+#include "../common/types.hpp"
 
 
 class Matrix

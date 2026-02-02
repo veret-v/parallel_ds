@@ -15,7 +15,8 @@
 #include <cusolverSp.h>
 
 #include "utillities.hpp"
-#include "../types.hpp"
+
+#include "../common/types.hpp"
 
 
 class LUfactor;

@@ -6,10 +6,10 @@
 #include <tuple>
 #include <typeinfo>
 
-#include "./cpu_version/valuesVector.hpp"
-#include "./cpu_version/matrix.hpp"
-#include "./cuda_version/cudaSparseMatrix.hpp"
-#include "./cuda_version/cudaDenseVector.hpp"
+#include "../cpu/valuesVector.hpp"
+#include "../cpu/matrix.hpp"
+#include "../gpu/cudaSparseMatrix.hpp"
+#include "../gpu/cudaDenseVector.hpp"
 
 
 enum class BoundaryType

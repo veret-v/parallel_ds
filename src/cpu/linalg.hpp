@@ -9,7 +9,8 @@
 
 #include "matrix.hpp"
 #include "valuesVector.hpp"
-#include "../types.hpp"
+
+#include "../common/types.hpp"
 
 #define EPS_ZERO 1e-8
 #define EPS_SWAP 1e-6

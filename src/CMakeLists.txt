@@ -1,63 +1,63 @@
 if(WITH_CUDA)
     target_sources(${PROJECT_NAME} PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaDualSimplex.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaDualSimplex.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaSparseMatrix.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaSparseMatrix.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaDenseVector.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaDenseVector.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaKernels.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaKernels.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaDualSimplex.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaDualSimplex.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaSparseMatrix.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaSparseMatrix.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaDenseVector.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaDenseVector.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaKernels.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaKernels.hpp
     )
     
     set_source_files_properties(
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaDualSimplex.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaDualSimplex.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaSparseMatrix.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaSparseMatrix.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaDenseVector.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaDenseVector.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaKernels.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/cuda_version/cudaKernels.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaDualSimplex.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaDualSimplex.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaSparseMatrix.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaSparseMatrix.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaDenseVector.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaDenseVector.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaKernels.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaKernels.hpp
     PROPERTIES LANGUAGE CUDA)
     
 endif()
 
 target_sources(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/parser.hpp 
-    ${CMAKE_CURRENT_SOURCE_DIR}/parser.cpp 
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/sequentialDualSimplex.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/sequentialDualSimplex.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/parallelDualSimplex.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/parallelDualSimplex.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/baseDualSimplex.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/baseDualSimplex.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/problem.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/problem.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/matrix.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/matrix.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/valuesVector.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/valuesVector.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/linalg.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/linalg.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/LPsolution.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/LPsolution.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/parser.hpp 
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/parser.cpp 
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/sequentialDualSimplex.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/sequentialDualSimplex.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/parallelDualSimplex.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/parallelDualSimplex.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/baseDualSimplex.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/baseDualSimplex.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/problem.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/problem.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/matrix.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/matrix.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/valuesVector.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/valuesVector.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/linalg.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/linalg.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/LPsolution.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/LPsolution.cpp
 )
 
 add_library(app_test STATIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/parser.hpp 
-    ${CMAKE_CURRENT_SOURCE_DIR}/parser.cpp 
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/sequentialDualSimplex.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/sequentialDualSimplex.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/baseDualSimplex.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/baseDualSimplex.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/problem.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/problem.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/matrix.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/matrix.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/valuesVector.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/valuesVector.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/linalg.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_version/linalg.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/parser.hpp 
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/parser.cpp 
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/sequentialDualSimplex.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/sequentialDualSimplex.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/baseDualSimplex.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/baseDualSimplex.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/problem.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/problem.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/matrix.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/matrix.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/valuesVector.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/valuesVector.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/linalg.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/linalg.cpp
 )
 

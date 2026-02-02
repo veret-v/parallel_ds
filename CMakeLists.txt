@@ -58,7 +58,7 @@ if(WITH_CUDA)
     )
 endif()
 
-target_sources(${PROJECT_NAME} PRIVATE "src/main.cpp" )
+target_sources(${PROJECT_NAME} PRIVATE "src/common/main.cpp" )
 target_include_directories(${PROJECT_NAME} PRIVATE "${PROJECT_SOURCE_DIR}")
 
 add_subdirectory("src")
