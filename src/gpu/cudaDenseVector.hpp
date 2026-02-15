@@ -19,7 +19,9 @@
 #include "../common/types.hpp"
 
 
-class LUfactor;
+#define VECTOR_COLS 1
+
+
 class CudaSparseMatrix;
 class CudaDenseVector;
 
@@ -53,7 +55,6 @@ private:
 class CudaDenseVector
 {
 friend class CudaSparseMatrix;
-friend class LUfactor;
 
 protected:
     double* host_values   = nullptr;
@@ -62,6 +63,7 @@ protected:
     size_t size = 0;
 
     cusparseDnVecDescr_t descr;
+    cudssMatrix_t        cudss_descr;
     
     void allocateMemory(size_t size);
     void freeMemory();
@@ -89,11 +91,23 @@ public:
     size_t getSize() const {return size;};
     size_t getSize() {return size;};
 
-    double dot(const cublasHandle_t handle, const CudaDenseVector &values_vector) const;
+    double dot(
+        const cublasHandle_t handle,
+        const CudaDenseVector &values_vector
+    ) const;
     double norm(const cublasHandle_t handle) const;
    
-    void axpyUpdate(const cublasHandle_t handle, const CudaDenseVector& values_vector, const double& alpha);
-    void betaWeightsUpdate(const cublasHandle_t handle, const CudaDenseVector& alpha_q, const CudaDenseVector& tau, const int p_idx);
+    void axpyUpdate(
+        const cublasHandle_t handle, 
+        const CudaDenseVector& values_vector, 
+        const double& alpha
+    );
+    void betaWeightsUpdate(
+        const cublasHandle_t handle, 
+        const CudaDenseVector& alpha_q, 
+        const CudaDenseVector& tau, 
+        const int p_idx
+    );
 
     void show() const;
 

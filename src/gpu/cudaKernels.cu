@@ -90,28 +90,23 @@ __global__ void swapColumnKernel(
     }
     __syncthreads();
     
-    // 2. Определяем границы для копирования
     int old_col_start = old_col_ptr[col_idx];
     int old_col_end = old_col_ptr[col_idx + 1];
     int left_size = old_col_start;
     int right_size = old_col_ptr[n] - old_col_end;
     
-    // 3. Параллельное копирование данных
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     
-    // Копируем левую часть (столбцы до заменяемого)
     if (idx < left_size) {
         new_values[idx] = old_values[idx];
         new_row_ind[idx] = old_row_ind[idx];
     }
     
-    // Копируем новый столбец
     if (idx < new_col_nnz) {
         new_values[left_size + idx] = new_col_values[idx];
         new_row_ind[left_size + idx] = new_col_row_ind[idx];
     }
     
-    // Копируем правую часть (столбцы после заменяемого)
     if (idx < right_size) {
         new_values[left_size + new_col_nnz + idx] = old_values[old_col_end + idx];
         new_row_ind[left_size + new_col_nnz + idx] = old_row_ind[old_col_end + idx];

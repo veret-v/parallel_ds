@@ -5,23 +5,45 @@ void CudaDenseVector::allocateMemory(size_t size)
 {
     this->size = size;
 
-    cudaMallocHost(&host_values, size*sizeof(double));
-    cudaMalloc(&device_values, size*sizeof(double));
+    CUDA_CALL_AND_CHECK(
+        cudaMallocHost(&host_values, size*sizeof(double)),
+        "cudaMallocHost"
+    )
+    CUDA_CALL_AND_CHECK(
+        cudaMalloc(&device_values, size*sizeof(double)),
+        "cudaMalloc"
+    );
 
-    cudaMemset(device_values, 0, size*sizeof(double));
-    cudaMemset(host_values, 0, size*sizeof(double));
+    CUDA_CALL_AND_CHECK(
+        cudaMemset(device_values, 0, size*sizeof(double)),
+        "cudaMemset"
+    );
+    CUDA_CALL_AND_CHECK(
+        cudaMemset(host_values, 0, size*sizeof(double)),
+        "cudaMemset"
+    );
 }
 
 
 void CudaDenseVector::updateDeviceMem()
 {
-    cudaMemcpy(device_values, host_values, size*sizeof(double), cudaMemcpyDefault);
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            device_values, host_values, 
+            size*sizeof(double), cudaMemcpyDefault),
+        "cudaMemcpy"
+    );
 }
 
 
 void CudaDenseVector::updateHostMem()
 {
-    cudaMemcpy(host_values, device_values, size*sizeof(double), cudaMemcpyDefault);
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            host_values, device_values, 
+            size*sizeof(double), cudaMemcpyDefault),
+        "cudaMemcpy"
+    );
 }
 
 
@@ -39,7 +61,26 @@ void CudaDenseVector::freeMemory()
 
 void CudaDenseVector::createDescr()
 {
-    cusparseCreateDnVec(&descr, size, device_values, CUDA_R_64F);
+    int64_t nrows = size, ncols = size;
+    int ldb = ncols, ldx = nrows;
+
+    CUSP_CALL_AND_CHECK(
+        cusparseCreateDnVec(
+            &descr, 
+            size, 
+            device_values, 
+            CUDA_R_64F),
+        "cusparseCreateDnVec"
+    );
+    
+    CUDSS_CALL_AND_CHECK(
+        cudssMatrixCreateDn(
+            &cudss_descr, 
+            size, VECTOR_COLS, ldb, 
+            device_values, 
+            CUDA_R_64F, CUDSS_LAYOUT_COL_MAJOR),
+        "cudssMatrixCreateDn"
+    );
 }
 
 
@@ -55,8 +96,17 @@ void CudaDenseVector::checkSize(const CudaDenseVector& values_vector) const
 
 CudaDenseVector::~CudaDenseVector()
 {
+    CUSP_CALL_AND_CHECK(
+        cusparseDestroyDnVec(descr),
+        "cusparseDestroyDnVec"
+    );
+
+    CUDSS_CALL_AND_CHECK(
+        cudssMatrixDestroy(cudss_descr), 
+        "cudssMatrixDestroy"
+    );
+
     freeMemory();
-    cusparseDestroyDnVec(descr);
 }
 
 
@@ -82,8 +132,21 @@ CudaDenseVector::CudaDenseVector(const ValuesVector& vector)
 CudaDenseVector::CudaDenseVector(const CudaDenseVector& values_vector)
 {
     allocateMemory(values_vector.getSize());
-    cudaMemcpy(host_values, values_vector.host_values, size*sizeof(double), cudaMemcpyHostToHost);
-    cudaMemcpy(device_values, values_vector.device_values, size*sizeof(double), cudaMemcpyDeviceToDevice);
+
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            host_values, values_vector.host_values, 
+            size*sizeof(double), cudaMemcpyHostToHost),
+        "cudaMemcpy"
+    );
+
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            device_values, values_vector.device_values, 
+            size*sizeof(double), cudaMemcpyDeviceToDevice),
+        "cudaMemcpy"
+    );
+
     createDescr();
 }
 
@@ -95,14 +158,26 @@ CudaDenseVector& CudaDenseVector::operator=(const CudaDenseVector& values_vector
     
     if (host_values != nullptr || 
         device_values != nullptr) 
-        cusparseDestroyDnVec(descr);
+        CudaDenseVector::~CudaDenseVector();
 
-    if (descr != nullptr) cusparseDestroyDnVec(descr);
+    if (descr != nullptr) CudaDenseVector::~CudaDenseVector();
 
-    freeMemory();
     allocateMemory(values_vector.getSize());
-    cudaMemcpy(host_values, values_vector.host_values, size*sizeof(double), cudaMemcpyHostToHost);
-    cudaMemcpy(device_values, values_vector.device_values, size*sizeof(double), cudaMemcpyDeviceToDevice);
+
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            host_values, values_vector.host_values, 
+            size*sizeof(double), cudaMemcpyHostToHost),
+        "cudaMemcpy"
+    );
+
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            device_values, values_vector.device_values, 
+            size*sizeof(double), cudaMemcpyDeviceToDevice),
+        "cudaMemcpy"
+    );
+
     createDescr();
 
     return *this;

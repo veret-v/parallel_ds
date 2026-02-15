@@ -3,72 +3,78 @@
 
 void CudaSparseMatrix::allocateMemory(size_t non_zero_size, size_t col_starts)
 {
-    cudaMallocHost(&host_values, non_zero_size*sizeof(double));
-    cudaMallocHost(&host_ptr, col_starts*sizeof(double));
-    cudaMallocHost(&host_id, non_zero_size*sizeof(double));
-
-    cudaMalloc(&device_values, non_zero_size*sizeof(double));
-    cudaMalloc(&device_ptr, col_starts*sizeof(double));
-    cudaMalloc(&device_id, non_zero_size*sizeof(double));
+    CUDA_CALL_AND_CHECK(cudaMalloc(&device_values, non_zero_size*sizeof(double)),
+                        "cudaMalloc for device_values");
+    CUDA_CALL_AND_CHECK(cudaMalloc(&device_ptr, col_starts*sizeof(double)),
+                        "cudaMalloc for device_ptr");
+    CUDA_CALL_AND_CHECK(cudaMalloc(&device_id, non_zero_size*sizeof(double)),
+                        "cudaMalloc for device_id");
 }
 
 
 void CudaSparseMatrix::freeMemory()
 {
-    cudaFree(device_values);
-    cudaFree(device_ptr);
-    cudaFree(device_id);
-
-    cudaFreeHost(host_values);
-    cudaFreeHost(host_ptr);
-    cudaFreeHost(host_id);
+    CUDA_CALL_AND_CHECK(cudaFree(device_values),
+                        "cudaFree for device_values");
+    CUDA_CALL_AND_CHECK(cudaFree(device_ptr),
+                        "cudaFree for device_ptr")
+    CUDA_CALL_AND_CHECK(cudaFree(device_id),
+                        "cudaFree for device_id")
 
     device_values = nullptr;
     device_ptr = nullptr;
     device_id = nullptr;
-
-    host_values = nullptr;
-    host_ptr = nullptr;
-    host_id = nullptr;
 }
 
 
 void CudaSparseMatrix::createDescr()
 {
-    cusparseCreateCsc(
-        &descr,
-        m, n, non_zero,
-        (void*)device_ptr,
-        (void*)device_id,
-        (void*)device_id,
-        CUSPARSE_INDEX_32I,  
-        CUSPARSE_INDEX_32I,  
-        CUSPARSE_INDEX_BASE_ZERO,
-        CUDA_R_64F
+    CUSP_CALL_AND_CHECK(
+        cusparseCreateCsr(
+            &mat_cusp_descr,
+            m, n, non_zero,
+            device_ptr,
+            device_id,
+            device_values,
+            CUSPARSE_INDEX_32I,  
+            CUSPARSE_INDEX_32I,  
+            CUSPARSE_INDEX_BASE_ZERO,
+            CUDA_R_64F),
+        "cusparseCreateCsc"
     );  
+
+    CUDSS_CALL_AND_CHECK(
+        cudssMatrixCreateCsr(
+            &mat_cudss_descr,
+            m, n, non_zero,
+            device_ptr,
+            NULL,
+            device_id,
+            device_values,
+            CUDA_R_32I, 
+            CUDA_R_64F,
+            CUDSS_MTYPE_GENERAL,
+            CUDSS_MVIEW_FULL,
+            CUDSS_BASE_ZERO
+        ), 
+        "cudssMatrixCreateCsr"
+    );
 }
 
 
 CudaSparseMatrix::~CudaSparseMatrix()
 {
+     CUSP_CALL_AND_CHECK(
+        cusparseDestroySpMat(mat_cusp_descr), 
+        "cusparseDestroySpMat"
+    );
+
+    CUDSS_CALL_AND_CHECK(
+        cudssMatrixDestroy(mat_cudss_descr),
+        "cudssMatrixDestroy"
+    );
+
     freeMemory();
-    cusparseDestroySpMat(descr);
-}
-
-
-void CudaSparseMatrix::updateDeviceMem()
-{
-    cudaMemcpy(device_values, host_values, non_zero*sizeof(double), cudaMemcpyDefault);
-    cudaMemcpy(device_ptr, host_ptr, major_dim*sizeof(int), cudaMemcpyDefault);
-    cudaMemcpy(device_id, host_id, non_zero*sizeof(int), cudaMemcpyDefault);
-}
-
-
-void CudaSparseMatrix::updateHostMem()
-{
-    cudaMemcpy(host_values, device_values, non_zero*sizeof(double), cudaMemcpyDefault);
-    cudaMemcpy(host_ptr, device_ptr, major_dim*sizeof(int), cudaMemcpyDefault);
-    cudaMemcpy(host_id, device_id, non_zero*sizeof(int), cudaMemcpyDefault);
 }
 
 
@@ -77,6 +83,7 @@ CudaSparseMatrix::CudaSparseMatrix(const size_t m, const size_t n)
     this -> m = m;
     this -> n = n;
 }
+
 
 CudaSparseMatrix::CudaSparseMatrix(const Matrix& matrix)
 {
@@ -92,9 +99,30 @@ CudaSparseMatrix::CudaSparseMatrix(const Matrix& matrix)
 
     allocateMemory(non_zero, major_dim + 1);
 
-    cudaMemcpy(device_values, elements_buf.data(), non_zero*sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_ptr, col_ptr_buf.data(), major_dim*sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_id, row_id_buf.data(), non_zero*sizeof(int), cudaMemcpyHostToDevice);
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            device_values, 
+            elements_buf.data(),
+            non_zero*sizeof(double), 
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy for device_values"
+    );
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            device_ptr, 
+            col_ptr_buf.data(), 
+            major_dim*sizeof(int), 
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy for device_ptr"
+    );
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            device_id, 
+            row_id_buf.data(), 
+            non_zero*sizeof(int), 
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy for device_id"
+    );
 
     createDescr();
 }
@@ -110,9 +138,30 @@ CudaSparseMatrix::CudaSparseMatrix(const CudaSparseMatrix& matrix)
 
     allocateMemory(non_zero, major_dim + 1);
 
-    cudaMemcpy(device_values, matrix.device_values, non_zero*sizeof(double), cudaMemcpyDeviceToDevice);
-    cudaMemcpy(device_ptr, matrix.device_ptr, major_dim*sizeof(int), cudaMemcpyDeviceToDevice);
-    cudaMemcpy(device_id, matrix.device_id, non_zero*sizeof(int), cudaMemcpyDeviceToDevice);
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            device_values, 
+            matrix.device_values, 
+            non_zero*sizeof(double), 
+            cudaMemcpyDeviceToDevice),
+        "cudaMemcpy for device_values"
+    );    
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            device_ptr, 
+            matrix.device_ptr, 
+            major_dim*sizeof(int), 
+            cudaMemcpyDeviceToDevice),
+        "cudaMemcpy for device_ptr"
+    );  
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            device_id, 
+            matrix.device_id, 
+            non_zero*sizeof(int), 
+            cudaMemcpyDeviceToDevice),
+        "cudaMemcpy for device_id"
+    );  
 
     createDescr();
 }
@@ -124,15 +173,12 @@ CudaSparseMatrix& CudaSparseMatrix::operator=(const CudaSparseMatrix& matrix)
         return *this;
     }
 
-    if (host_values    != nullptr || 
-        host_ptr   != nullptr || 
-        host_id    != nullptr || 
-        device_values  != nullptr || 
+    if (device_values  != nullptr || 
         device_ptr != nullptr || 
         device_id  != nullptr) 
         freeMemory();
 
-    if (descr != nullptr) cusparseDestroySpMat(descr);
+    if (mat_cusp_descr != nullptr) cusparseDestroySpMat(mat_cusp_descr);
 
     this -> m = matrix.m;
     this -> n = matrix.n;
@@ -142,13 +188,30 @@ CudaSparseMatrix& CudaSparseMatrix::operator=(const CudaSparseMatrix& matrix)
 
     allocateMemory(non_zero, major_dim + 1);
 
-    cudaMemcpy(host_values, matrix.host_values, non_zero*sizeof(double), cudaMemcpyHostToHost);
-    cudaMemcpy(host_ptr, matrix.host_ptr, major_dim*sizeof(int), cudaMemcpyHostToHost);
-    cudaMemcpy(host_id, matrix.host_id, non_zero*sizeof(int), cudaMemcpyHostToHost);
-
-    cudaMemcpy(device_values, matrix.device_values, non_zero*sizeof(double), cudaMemcpyDeviceToDevice);
-    cudaMemcpy(device_ptr, matrix.device_ptr, major_dim*sizeof(int), cudaMemcpyDeviceToDevice);
-    cudaMemcpy(device_id, matrix.device_id, non_zero*sizeof(int), cudaMemcpyDeviceToDevice);
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            device_values, 
+            matrix.device_values, 
+            non_zero*sizeof(double), 
+            cudaMemcpyDeviceToDevice),
+        "cudaMemcpy for device_values"
+    );    
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            device_ptr, 
+            matrix.device_ptr, 
+            major_dim*sizeof(int), 
+            cudaMemcpyDeviceToDevice),
+        "cudaMemcpy for device_ptr"
+    );  
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            device_id, 
+            matrix.device_id, 
+            non_zero*sizeof(int), 
+            cudaMemcpyDeviceToDevice),
+        "cudaMemcpy for device_id"
+    );  
 
     createDescr();
 
@@ -174,41 +237,52 @@ void CudaSparseMatrix::dotUpdate(
     void* dBuffer = nullptr;
     size_t bufferSize = 0;
 
-    cusparseSpMV_bufferSize(
-        handle,
-        oper_type,
-        &alpha,
-        descr,
-        rhs.descr,
-        &beta,
-        sol.descr,
-        CUDA_R_64F,
-        CUSPARSE_SPMV_ALG_DEFAULT,
-        &bufferSize
+    CUSP_CALL_AND_CHECK(
+        cusparseSpMV_bufferSize(
+            handle,
+            oper_type,
+            &alpha,
+            mat_cusp_descr,
+            rhs.descr,
+            &beta,
+            sol.descr,
+            CUDA_R_64F,
+            CUSPARSE_SPMV_ALG_DEFAULT,
+            &bufferSize
+        ), "cusparseSpMV_bufferSize"
     );
 
-    cudaMalloc(&dBuffer, bufferSize);
-
-    cusparseSpMV(
-        handle,
-        oper_type,
-        &alpha,
-        descr,
-        rhs.descr,
-        &beta,
-        sol.descr,
-        CUDA_R_64F,
-        CUSPARSE_SPMV_ALG_DEFAULT,
-        dBuffer
+    CUDA_CALL_AND_CHECK(
+        cudaMalloc(&dBuffer, bufferSize),
+        "cudaMalloc for dotUpdate"
     );
 
-    cudaFree(dBuffer);
+    CUSP_CALL_AND_CHECK(
+        cusparseSpMV(
+            handle,
+            oper_type,
+            &alpha,
+            mat_cusp_descr,
+            rhs.descr,
+            &beta,
+            sol.descr,
+            CUDA_R_64F,
+            CUSPARSE_SPMV_ALG_DEFAULT,
+            dBuffer
+        ), "cusparseSpMV"
+    );
+
+    CUDA_CALL_AND_CHECK(
+        cudaFree(dBuffer),
+        "cudaFree for dotUpdate"
+    );
 }
 
 
-
-
-void CudaSparseMatrix::swapColumn(cusparseHandle_t handle, CudaSparseMatrix& A, const size_t col1, const size_t col2)
+void CudaSparseMatrix::swapColumn(
+    cusparseHandle_t handle, 
+    CudaSparseMatrix& A, 
+    const size_t col1, const size_t col2)
 {
     if (m != std::get<0>(A.getSize()))
     {
@@ -240,64 +314,6 @@ void CudaSparseMatrix::getColumn(const size_t p, CudaDenseVector& rhs) const
 }
 
 
-void CudaSparseMatrix::LUdecompose(cusolverSpHandle_t handle, LUfactor& lu_factor)
-{
-    if (m != n)
-    {
-        throw "Already scr";
-        exit(1);
-    }
-    csrluInfo_t info = NULL;
-    cusparseMatDescr_t descr_lu = NULL;
-
-    cusolverSpCreateCsrluInfo(&info);
-
-    size_t internalDataInBytes, workspaceInBytes;
-
-    cusparseCreateMatDescr(&descr_lu);
-    cusparseSetMatType(descr_lu, CUSPARSE_MATRIX_TYPE_GENERAL);
-    cusparseSetMatIndexBase(descr_lu, CUSPARSE_INDEX_BASE_ZERO);
-
-    cusolverSpDcsrluBufferInfo(
-        handle, n, non_zero, descr_lu,
-        device_values, device_ptr, device_id,
-        info, &internalDataInBytes, &workspaceInBytes
-    );
-
-    cusolverSpXcsrluAnalysis(
-        handle, n, non_zero, descr_lu,
-        device_ptr, device_id, info
-    );
-
-    int singularity = 0;
-    void* d_buffer = nullptr;
-    cudaMalloc(&d_buffer, workspaceInBytes);
-    
-    cusolverSpDcsrluFactor(
-        handle, n, non_zero, descr_lu,
-        device_values, device_ptr, device_id,
-        info, SING_EPS, d_buffer
-    );
-
-    int nnzL = 0, nnzU = 0;
-
-    cusolverSpXcsrluNnz(
-        handle, &nnzL, 
-        &nnzU, info
-    );
-
-    cusolverSpDcsrluExtract(
-        handle, 
-        lu_factor.P, lu_factor.Q,
-        lu_factor.descr_l, 
-        lu_factor.device_values_l, lu_factor.device_ptr_l, lu_factor.device_id_l,
-        lu_factor.descr_u, 
-        lu_factor.device_values_u, lu_factor.device_ptr_u, lu_factor.device_id_u,
-        info, d_buffer
-    );
-}
-
-
 void CudaSparseMatrix::cscToCsr(cusparseHandle_t handle)
 {
     if (!is_CSC)
@@ -313,41 +329,61 @@ void CudaSparseMatrix::cscToCsr(cusparseHandle_t handle)
     int* scr_ptr    = nullptr;
     int* scr_id     = nullptr;
 
-    cudaMalloc(&scr_val, non_zero * sizeof(double));
-    cudaMalloc(&scr_ptr, (m + 1) * sizeof(int));
-    cudaMalloc(&scr_id, non_zero * sizeof(int));
-
-    cusparseCsr2cscEx2_bufferSize(
-        handle,
-        m, n, non_zero,
-        device_values, device_ptr, device_id,
-        scr_val, scr_ptr, scr_id,
-        CUDA_R_64F,
-        CUSPARSE_ACTION_NUMERIC,
-        CUSPARSE_INDEX_BASE_ZERO,
-        CUSPARSE_CSR2CSC_ALG1,
-        &bufferSize
+    CUDA_CALL_AND_CHECK(
+        cudaMalloc(&scr_val, non_zero * sizeof(double)),
+        "cudaMalloc for scr_val"
     );
-    
-    cudaMalloc(&d_buffer, bufferSize);
-    
-    cusparseCsr2cscEx2(
-        handle,
-        m, n, non_zero,
-        device_values, device_ptr, device_id,
-        scr_val, scr_ptr, scr_id,
-        CUDA_R_64F,
-        CUSPARSE_ACTION_NUMERIC,
-        CUSPARSE_INDEX_BASE_ZERO,
-        CUSPARSE_CSR2CSC_ALG1,
-        d_buffer
+    CUDA_CALL_AND_CHECK(
+        cudaMalloc(&scr_ptr, (m + 1) * sizeof(int)),
+        "cudaMalloc for scr_ptr"
+    );
+    CUDA_CALL_AND_CHECK(
+        cudaMalloc(&scr_id, non_zero * sizeof(int)),
+        "cudaMalloc for scr_id"
     );
 
-    cudaFree(d_buffer);
+    CUSP_CALL_AND_CHECK(
+        cusparseCsr2cscEx2_bufferSize(
+            handle,
+            m, n, non_zero,
+            device_values, device_ptr, device_id,
+            scr_val, scr_ptr, scr_id,
+            CUDA_R_64F,
+            CUSPARSE_ACTION_NUMERIC,
+            CUSPARSE_INDEX_BASE_ZERO,
+            CUSPARSE_CSR2CSC_ALG1,
+            &bufferSize
+        ), "cusparseCsr2cscEx2_bufferSize"
+    );
+    
+    CUDA_CALL_AND_CHECK(
+        cudaMalloc(&d_buffer, bufferSize),
+        "cudaMalloc for d_buffer"
+    );
+    
+    CUSP_CALL_AND_CHECK(
+        cusparseCsr2cscEx2(
+            handle,
+            m, n, non_zero,
+            device_values, device_ptr, device_id,
+            scr_val, scr_ptr, scr_id,
+            CUDA_R_64F,
+            CUSPARSE_ACTION_NUMERIC,
+            CUSPARSE_INDEX_BASE_ZERO,
+            CUSPARSE_CSR2CSC_ALG1,
+            d_buffer
+        ), "cusparseCsr2cscEx2_bufferSize"
+    );
+
+    CUDA_CALL_AND_CHECK(
+        cudaFree(d_buffer),
+        "cudaFree for d_buffer"
+    );
 
     freeMemory();
 
     major_dim = m;
+
     allocateMemory(non_zero, major_dim + 1);
 
     device_values = scr_val;
@@ -360,48 +396,96 @@ void CudaSparseMatrix::cscToCsr(cusparseHandle_t handle)
 }
 
 
-void LUfactor::setup(
-    cusolverRfHandle_t rf_handle, 
-    const CudaSparseMatrix& orig
-) const
+void CudaSparseMatrix::LUdecompose(
+    cudssHandle_t handle, 
+    cudssConfig_t config, 
+    cudssData_t data,
+    cudssHandle_t handle_T, 
+    cudssConfig_t config_T, 
+    cudssData_t data_T
+)
 {
-    cusolverRfSetupDevice(
-        orig.n, orig.non_zero,
-        orig.device_ptr, orig.device_id, orig.device_values, 
-        non_zero_l, 
-        device_ptr_l, device_id_l, device_values_l, 
-        non_zero_u, 
-        device_ptr_u, device_id_u, device_values_u, 
-        P, Q, rf_handle
+    cudssMatrix_t x, rhs; // у функции cudssExecute универсальная сигнатура для всех операций, это просто заглушки
+
+    CUDSS_CALL_AND_CHECK(
+        cudssExecute(
+            handle, 
+            CUDSS_PHASE_ANALYSIS, 
+            config, 
+            data,
+            mat_cudss_descr,
+            x, rhs),
+        "cudssExecute:CUDSS_PHASE_ANALYSIS"
     );
 
-    cusolverRfAnalyze(rf_handle);
-    cusolverRfRefactor(rf_handle);
+    CUDSS_CALL_AND_CHECK(
+        cudssExecute(
+            handle, 
+            CUDSS_PHASE_FACTORIZATION, 
+            config, 
+            data,
+            mat_cudss_descr,
+            x, rhs),
+        "cudssExecute:CUDSS_PHASE_FACTORIZATION"
+    );
+
+     CUDSS_CALL_AND_CHECK(
+        cudssExecute(
+            handle_T, 
+            CUDSS_PHASE_ANALYSIS, 
+            config_T, 
+            data_T,
+            mat_cudss_descr_T,
+            x, rhs),
+        "cudssExecute:CUDSS_PHASE_ANALYSIS"
+    );
+
+    CUDSS_CALL_AND_CHECK(
+        cudssExecute(
+            handle_T, 
+            CUDSS_PHASE_FACTORIZATION, 
+            config_T, 
+            data_T,
+            mat_cudss_descr_T,
+            x, rhs),
+        "cudssExecute:CUDSS_PHASE_FACTORIZATION"
+    );
 }
 
 
-void LUfactor::solve(
-    cusolverRfHandle_t handle, 
+ void CudaSparseMatrix::solve(
+    cudssHandle_t handle, 
+    cudssConfig_t config, 
+    cudssData_t data,
     const CudaDenseVector& rhs, 
     CudaDenseVector& sol, 
     const bool& transpose
-) 
-{
-    cusolverRfSolve(
-        handle,
-         P, Q, 1, 
-         sol.device_values, sol.size, 
-         rhs.device_values, rhs.size
-    );
-    cusolverRfSolve
-}
-
-
-void LUfactor::update(
-    cusolverRfHandle_t handle, 
-    const size_t& idx, 
-    const CudaDenseVector& vector
 )
 {
-}    
-
+    if (transpose)
+    {
+        CUDSS_CALL_AND_CHECK(
+            cudssExecute(
+                handle, 
+                CUDSS_PHASE_ANALYSIS, 
+                config, 
+                data,
+                mat_cudss_descr_T,
+                sol.cudss_descr, rhs.cudss_descr),
+            "cudssExecute:CUDSS_PHASE_ANALYSIS"
+        );
+    } 
+    else
+    {
+        CUDSS_CALL_AND_CHECK(
+            cudssExecute(
+                handle, 
+                CUDSS_PHASE_FACTORIZATION, 
+                config, 
+                data,
+                mat_cudss_descr_T,
+                sol.cudss_descr, rhs.cudss_descr),
+            "cudssExecute:CUDSS_PHASE_FACTORIZATION"
+        );
+    }
+}

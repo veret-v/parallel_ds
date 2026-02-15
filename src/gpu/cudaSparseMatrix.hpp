@@ -14,6 +14,8 @@
 #include <cusolverRf.h>
 #include <cusolverSp.h>
 #include <cusolverSp_LOWLEVEL_PREVIEW.h>
+#include <math.h>
+#include <cudss.h>
 
 #include "utillities.hpp"
 #include "cudaDenseVector.hpp"
@@ -25,26 +27,22 @@
 
 class CudaSparseMatrix
 {
-friend class LUfactor;
-
 private:
     size_t m        = 0; // rows
     size_t n        = 0; // cols
 
     size_t major_dim = 0;
-    size_t non_zero = 0;
+    size_t non_zero  = 0;
 
     bool is_CSC = true;
 
-    double* host_values   = nullptr;
-    int* host_ptr     = nullptr;
-    int* host_id      = nullptr;
-
     double* device_values = nullptr;
-    int* device_ptr   = nullptr;
-    int* device_id    = nullptr;
+    int* device_ptr       = nullptr;
+    int* device_id        = nullptr;
 
-    cusparseSpMatDescr_t descr = nullptr;
+    cusparseSpMatDescr_t mat_cusp_descr;    // дескриптор для матричного умножения
+    cudssMatrix_t        mat_cudss_descr;   // дескриптор не транспонированной матрицы для решений Ax = b
+    cudssMatrix_t        mat_cudss_descr_T; // дескриптор транспонированной матрицы для решений A^Tx = b(из-за структуры CUDSS)
 
     void allocateMemory(size_t non_zero_size, size_t col_starts);
     void freeMemory();
@@ -52,9 +50,6 @@ private:
     void cscToCsr(cusparseHandle_t handle);
     
 public:
-    void updateDeviceMem();
-    void updateHostMem();
-
     CudaSparseMatrix(const size_t m, const size_t n);
     CudaSparseMatrix(const Matrix& matrix);
     CudaSparseMatrix() : CudaSparseMatrix(0, 0) {};
@@ -74,9 +69,23 @@ public:
     );
 
     void LUdecompose(
-        cusolverSpHandle_t handle, 
-        LUfactor& lu_factor
+        cudssHandle_t handle, 
+        cudssConfig_t config, 
+        cudssData_t data,
+        cudssHandle_t handle_T, 
+        cudssConfig_t config_T, 
+        cudssData_t data_T
     );
+
+    void solve(
+        cudssHandle_t handle, 
+        cudssConfig_t config, 
+        cudssData_t data,
+        const CudaDenseVector& rhs, 
+        CudaDenseVector& sol, 
+        const bool& transpose
+    );
+
     void swapColumn(
         cusparseHandle_t handle, 
         CudaSparseMatrix& A, 
@@ -86,44 +95,18 @@ public:
 };
 
 
-class LUfactor
+class PFIfactor
 {
-friend class CudaSparseMatrix;
+private:
+    size_t n = 0;
 
-protected:
-    cusparseMatDescr_t descr_l;
-    cusparseMatDescr_t descr_u;
-
-    double* device_values_l = nullptr;
-    int* device_ptr_l   = nullptr;
-    int* device_id_l    = nullptr;
-
-    double* device_values_u = nullptr;
-    int* device_ptr_u   = nullptr;
-    int* device_id_u    = nullptr;
-
-    int* P = nullptr;
-    int* Q = nullptr;
-
-    size_t non_zero_u = 0;
-    size_t non_zero_l = 0;
+    double* device_values = nullptr;
+    int* device_ptr       = nullptr;
 
 public:
-    void setup(
-        cusolverRfHandle_t handle, 
-        const CudaSparseMatrix& orig
-    ) const;
+    PFIfactor();
+    ~PFIfactor();
 
-    void solve(
-        cusolverRfHandle_t handle, 
-        const CudaDenseVector& rhs, 
-        CudaDenseVector& sol, 
-        const bool& transpose
-    );
-
-    void update(
-        cusolverRfHandle_t handle, 
-        const size_t& idx, 
-        const CudaDenseVector& vector
-    );
+    void addEtaMatrix();
+    void applyPFI();
 };

@@ -10,6 +10,33 @@
 #include "cudaKernels.hpp"
 
 
+#define CUDA_CALL_AND_CHECK(call, msg) \
+    do { \
+        cudaError_t status = call; \ 
+        if (status != cudaSuccess) { \
+            printf("FAILED: CUDA API returned error = %d, details: " #msg "\n", status); \
+        } \
+    } while(0);
+
+
+#define CUSP_CALL_AND_CHECK(call, msg) \
+    do { \
+        cusparseStatus_t status = call; \ 
+        if (status != CUSPARSE_STATUS_SUCCESS) { \
+            printf("FAILED: CUSPARSE call ended unsuccessfully with status = %d, details: " #msg "\n", status); \
+        } \
+    } while(0);
+
+
+#define CUDSS_CALL_AND_CHECK(call, msg) \
+    do { \
+        cudssStatus_t status = call; \ 
+        if (status != CUDSS_STATUS_SUCCESS) { \
+            printf("FAILED: CUDSS call ended unsuccessfully with status = %d, details: " #msg "\n", status); \
+        } \
+    } while(0);
+
+
 cudaStream_t getStreamFromHandle(cublasHandle_t handle); 
 cublasPointerMode_t getPointerMode(cublasHandle_t handle);
 cublasStatus_t betaWeightsUpdateLauncher(

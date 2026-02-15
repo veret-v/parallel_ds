@@ -37,15 +37,33 @@ double Matrix::operator()(const size_t i, const size_t j) const
     int right = col_ptr[j + 1] - 1;
     
     while (left <= right) {
-        int mid = left + (right - left) / 2;
+        int mid =  left + (right - left) / 2;
         if (row_id[mid] == i) 
-            return row_id[mid];
+            return elem_csc[mid];
         else if (row_id[mid] < i) 
             left = mid + 1;
         else 
             right = mid - 1;
     }
-    return 0.0;
+    return 0.0; // add unbound axception  processing
+}
+
+
+double& Matrix::operator()(const size_t i, const size_t j)
+{
+    int left = col_ptr[j];
+    int right = col_ptr[j + 1] - 1;
+    
+    while (left <= right) {
+        int mid = left + (right - left) / 2;
+        if (row_id[mid] == i) 
+            return elem_csc[mid];
+        else if (row_id[mid] < i) 
+            left = mid + 1;
+        else 
+            right = mid - 1;
+    }
+    return elem_csc[0]; // add unbound axception  processing
 }
 
 

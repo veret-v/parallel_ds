@@ -36,8 +36,11 @@ endif()
 
 # CUDA
 if(WITH_CUDA)
-    find_package(CUDAToolkit REQUIRED)
+    set(cudss_DIR "/usr/lib/x86_64-linux-gnu/cmake/cudss")
 
+    find_package(CUDAToolkit REQUIRED)
+    find_package(cudss REQUIRED)
+   
     add_compile_definitions(WITH_CUDA)
 
     set(CMAKE_CUDA_STANDARD 17)
@@ -50,6 +53,7 @@ if(WITH_CUDA)
         CUDA::cusolver
         CUDA::cublas 
         pthread dl)
+    target_link_libraries(${PROJECT_NAME} cudss)
     
     set_target_properties(${PROJECT_NAME} PROPERTIES
         CUDA_ARCHITECTURES "native" 

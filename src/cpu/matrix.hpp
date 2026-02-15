@@ -29,6 +29,8 @@ public:
     Matrix() : Matrix(0, 0) {};
    
     double operator()(const size_t i, const size_t j) const;
+    double& operator()(const size_t i, const size_t j);
+
     ValuesVector operator()(const size_t p) const;
     Matrix operator()(const IndexVector& indexes) const;
     Matrix& operator=(const Matrix& Matrix);
@@ -41,7 +43,6 @@ public:
     void stackColUnitMatrix();
     void dotEtaMatrix(const EtaMatrix& etaMatrix);
     ValuesVector dot(const ValuesVector& Vector, bool transpose);
-    Matrix T() const;
 
     void swapColumn(Matrix& A, const size_t b_idx, const size_t a_idx);
     void swapRows(const size_t row1, const size_t row2);
