@@ -57,58 +57,239 @@ __global__ void betaWeightsUpdateKernelOpt(
 };
 
 
-__global__ void swapColumnKernel(
-    int m, 
-    int n,
-    double* old_values, 
-    double* old_row_ind, 
-    double* old_col_ptr,                           
-    int col_idx,
-    double* new_col_values, 
-    const int* new_col_row_ind, 
-    int new_col_nnz,
-    double* new_values, 
-    int* new_row_ind, 
-    int* new_col_ptr
+__global__ void spmvUpdateKernel(    
+    double* y,
+    const double* x,
+    const double* val_csr,
+    const int* id_csr,
+    const int* ptr_csr,
+    const int* need_ptrs,
+    const int nnz,
+    const int major_dim,
+    const double alpha,
+    const double beta
 )
 {
-    if (blockIdx.x == 0 && threadIdx.x == 0) {
-        int old_col_start = old_col_ptr[col_idx];
-        int old_col_end = old_col_ptr[col_idx + 1];
-        int old_col_size = old_col_end - old_col_start;
-        int offset = new_col_nnz - old_col_size;
+    __shared__ double t_sum[WARP_SIZE]; 
+    int j;
+
+    int t_id = threadIdx.x + blockDim.x * blockIdx.x; 
+    int t_warp = t_id & WARP_SIZE; 
+
+    int stride = blockDim.x * gridDim.x;
+    
+    for (int row = t_id / WARP_SIZE; row < major_dim; row += stride)
+    {
+        t_sum[threadIdx.x] = 0;
+
+        for (j = ptr_csr[need_ptrs[row]] + t_warp; j < ptr_csr[need_ptrs[row] + 1]; j += WARP_SIZE)
+            t_sum[threadIdx.x] += val_csr[j] * x[id_csr[j]];
+
+        if (t_warp < 16) t_sum[threadIdx.x] += t_sum[threadIdx.x + 16];
+        if (t_warp < 8)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 8];
+        if (t_warp < 4)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 4];
+        if (t_warp < 2)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 2];
+        if (t_warp < 1)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 1];
         
-        for (int i = 0; i <= col_idx; i++) {
-            new_col_ptr[i] = old_col_ptr[i];
-        }
-        
-        new_col_ptr[col_idx + 1] = old_col_start + new_col_nnz;
-        
-        for (int i = col_idx + 2; i <= n; i++) {
-            new_col_ptr[i] = old_col_ptr[i] + offset;
-        }
-    }
-    __syncthreads();
-    
-    int old_col_start = old_col_ptr[col_idx];
-    int old_col_end = old_col_ptr[col_idx + 1];
-    int left_size = old_col_start;
-    int right_size = old_col_ptr[n] - old_col_end;
-    
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    
-    if (idx < left_size) {
-        new_values[idx] = old_values[idx];
-        new_row_ind[idx] = old_row_ind[idx];
-    }
-    
-    if (idx < new_col_nnz) {
-        new_values[left_size + idx] = new_col_values[idx];
-        new_row_ind[left_size + idx] = new_col_row_ind[idx];
-    }
-    
-    if (idx < right_size) {
-        new_values[left_size + new_col_nnz + idx] = old_values[old_col_end + idx];
-        new_row_ind[left_size + new_col_nnz + idx] = old_row_ind[old_col_end + idx];
+        if (t_warp == 0)
+            y[row] = beta * y[row] + alpha * t_sum[threadIdx.x];
     }
 }
+
+
+__global__ void spmvUpdateSpKernel(    
+    double* y,
+    const double* x,
+    const int* x_idx, 
+    const double* val_csr,
+    const int* id_csr,
+    const int* ptr_csr,
+    const int* need_ptrs,
+    const int nnz,
+    const int major_dim,
+    const double alpha,
+    const double beta
+)
+{
+    __shared__ double t_sum[WARP_SIZE]; 
+    int j;
+
+    int t_id = threadIdx.x + blockDim.x * blockIdx.x; 
+    int t_warp = t_id & WARP_SIZE; 
+
+    int stride = blockDim.x * gridDim.x;
+    
+    for (int row = t_id / WARP_SIZE; row < major_dim; row += stride)
+    {
+        t_sum[threadIdx.x] = 0;
+
+        for (j = ptr_csr[need_ptrs[row]] + t_warp; j < ptr_csr[need_ptrs[row] + 1]; j += WARP_SIZE)
+            t_sum[threadIdx.x] += val_csr[j] * x[x_idx[id_csr[j]]];
+
+        if (t_warp < 16) t_sum[threadIdx.x] += t_sum[threadIdx.x + 16];
+        if (t_warp < 8)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 8];
+        if (t_warp < 4)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 4];
+        if (t_warp < 2)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 2];
+        if (t_warp < 1)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 1];
+        
+        if (t_warp == 0)
+            y[row] = beta * y[row] + alpha * t_sum[threadIdx.x];
+    }
+}
+
+
+__global__ void spmvUpdateSetKernel(    
+    double *y,
+    const int *set_id,
+    const int set_id_size,
+    const double *x,
+    const double *z,
+    const double *val_csr,
+    const int *id_csr,
+    const int *ptr_csr,
+    const int* need_ptrs,
+    const int nnz,
+    const int major_dim,
+    const double alpha,
+    const double beta
+)
+{
+    __shared__ double t_sum[WARP_SIZE]; 
+    int j;
+
+    int t_id = threadIdx.x + blockDim.x * blockIdx.x; 
+    int t_warp = t_id & WARP_SIZE; 
+
+    int stride = blockDim.x * gridDim.x;
+    
+    for (int i = t_id / WARP_SIZE; i < set_id_size; i += stride)
+    {
+        int row = set_id[i];
+        t_sum[threadIdx.x] = 0;
+
+        for (j = ptr_csr[need_ptrs[row]] + t_warp; j < ptr_csr[need_ptrs[row] + 1]; j += WARP_SIZE)
+            t_sum[threadIdx.x] += val_csr[j] * x[id_csr[j]];
+
+        if (t_warp < 16) t_sum[threadIdx.x] += t_sum[threadIdx.x + 16];
+        if (t_warp < 8)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 8];
+        if (t_warp < 4)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 4];
+        if (t_warp < 2)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 2];
+        if (t_warp < 1)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 1];
+        
+        if (t_warp == 0)
+            y[row] = beta * z[row] + alpha * t_sum[threadIdx.x];
+    }
+}
+
+
+__global__ void applyEtaMatKernel(    
+    double *y, 
+    const double *x,
+    const double *device_values,
+    const int *device_col_id,
+    const int eta_num,
+    const int col_len
+)
+{
+    int tid = threadIdx.x;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+    
+    for (i; i < col_len; i += stride)
+    {
+        if (i != device_col_id[eta_num])
+            y[i] = x[i] + x[device_col_id[eta_num]] * device_values[i + eta_num * col_len]; 
+        else
+            y[i] = x[device_col_id[eta_num]] * device_values[i + eta_num * col_len]; 
+    }
+    
+}
+
+
+__global__ void applyPFIKernel(    
+    double *y,
+    const double *x,
+    const double *device_values,
+    const int *device_col_id,
+    const int size,
+    const int col_len
+)
+{
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    
+    if (idx == 0) {  
+        int numBlocks = (col_len + WARP_SIZE - 1) / WARP_SIZE;
+        
+        for (int i = 0; i >= size; i++)
+        {
+            applyEtaMatKernel<<<numBlocks, WARP_SIZE>>>(
+                y, x, device_values, 
+                device_col_id, i, 
+                col_len
+            );
+        
+            cudaDeviceSynchronize();
+        }
+    }
+}
+
+
+__global__ void applyEtaMatTKernel(   
+    double *y, 
+    const double *x,
+    const double *device_values,
+    const int *device_col_id,
+    const int eta_num,
+    const int col_len
+)
+{
+    __shared__ double sdata[WARP_SIZE];
+    int tid = threadIdx.x;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+
+    for (i; i < col_len; i += stride)
+        sdata[tid] = x[i] * device_values[i + eta_num * col_len];
+
+    __syncthreads();
+
+    for(int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            sdata[tid] += sdata[tid + s];
+        }
+        __syncthreads();
+    }
+
+    if (tid == 0) 
+        atomicAdd(y + device_col_id[eta_num], sdata[0]);
+}
+
+
+
+__global__ void applyPFITKernel(    
+    double *y,
+    const double *x,
+    const double *device_values,
+    const int *device_col_id,
+    const int size,
+    const int col_len
+)
+{
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    
+    if (idx == 0) {  
+        int numBlocks = (col_len + WARP_SIZE - 1) / WARP_SIZE;
+        
+        for (int i = size - 1; i >= 0; i--)
+        {
+            applyEtaMatTKernel<<<numBlocks, WARP_SIZE>>>(
+                y, x, device_values, 
+                device_col_id, i, 
+                col_len
+            );
+        
+            cudaDeviceSynchronize();
+        }
+    }
+}
+

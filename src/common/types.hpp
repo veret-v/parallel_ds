@@ -36,11 +36,20 @@ enum class PresolverMethods
     UNKNOWN
 };
 
-typedef std::vector<size_t> IndexVector;
-typedef std::tuple <size_t, size_t> cudaMatrixSize;
+enum class SpmvOptions
+{
+    FULL_UPDATE,
+    SET_UPDATE,
+    FULL_UPDATE_T,
+    SET_UPDATE_T,
+    UNKNOWN
+};
+
+typedef std::vector<int> IndexVector;
+typedef std::tuple <int, int> cudaMatrixSize;
 typedef std::vector<BoundaryType> BoundaryTypeVector;
-typedef size_t cudaVectorSize;
-typedef std::tuple <size_t, size_t> MatrixSize;
-typedef size_t VectorSize;
-typedef std::tuple<ValuesVector, size_t> EtaMatrix;
+typedef int cudaVectorSize;
+typedef std::tuple <int, int> MatrixSize;
+typedef int VectorSize;
+typedef std::tuple<ValuesVector, int> EtaMatrix;
 

@@ -34,6 +34,17 @@ if(OpenMP_CXX_FOUND)
     target_link_libraries(${PROJECT_NAME} OpenMP::OpenMP_CXX)
 endif()
 
+# MPI
+find_package(MPI REQUIRED)
+target_link_libraries(${PROJECT_NAME} MPI::MPI_CXX)
+
+# Intel MKL
+find_package(MKL REQUIRED)
+if (MKL_FOUND)
+    include_directories(${MKL_INCLUDE_DIR})
+    target_link_libraries(${PROJECT_NAME} ${MKL_LIBRARIES})
+endif()
+
 # CUDA
 if(WITH_CUDA)
     set(cudss_DIR "/usr/lib/x86_64-linux-gnu/cmake/cudss")

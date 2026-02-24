@@ -35,6 +35,7 @@
 // #define DEBUG
 
 
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
 class BaseDualSimplex
 {
 protected:
@@ -47,29 +48,27 @@ protected:
 
     bool perturbed = false;
 
-    size_t maxcycle;
+    int maxcycle;
+    int non_basis_size;
+    int basis_size;
 
-    size_t non_basis_size;
-
-    Problem* problem;
+    Problem<MatrixType, VectorType>* problem;
 
     LPsolution solution;
 
     PresolverMethods presolver_method;
     SolverMethods solver_method;
 
-    ValuesVector x;
-    ValuesVector d;
-    ValuesVector original_costs;
+    VectorType x;
+    VectorType d;
+    VectorType original_costs;
 
-    IndexVector basis_indexes;
-    IndexVector non_basis_indexes;
+    IndexVectorType basis_indexes;
+    IndexVectorType non_basis_indexes;
 
-    Matrix B;
-    Matrix AN;
+    MatrixType B;
 
     double obj_func_val;
-
 
     virtual SolverMethods    stringToSolverMethod(const std::string& method_name);
     virtual PresolverMethods stringToPreSolverMethod(const std::string& method_name);
@@ -81,7 +80,7 @@ protected:
     virtual void initDualSimplex();
 
     void calcDualInfeasible();
-    size_t counterDualInfeasible() const;
+    int counterDualInfeasible() const;
 
     void perturbCosts();
     void randomBasis();
@@ -90,17 +89,14 @@ protected:
     bool checkDualFeasible()   const;
     bool checkPerturbNeed()    const;
 
-    double getWeight(const size_t i) const;
-    size_t calcNonzeroInColumn(const size_t i) const;
+    double getWeight(const int i) const;
+    int calcNonzeroInColumn(const int i) const;
 
-    bool minLex(const ValuesVector& a, const ValuesVector& b);
-    ValuesVector prepareForLex(const ValuesVector& a, const size_t idx);
-
-    bool setDelta(const size_t& j, double& delta, bool& is_lower);
-    bool setRatioTestCandidates(IndexVector& F,const ValuesVector& tmp_alpha_p);
+    bool setDelta(const int& j, double& delta, bool& is_lower);
+    bool setRatioTestCandidates(IndexVector& F,const VectorType& tmp_alpha_p);
 
 public:
-    BaseDualSimplex(Problem& _problem);
+    BaseDualSimplex(Problem<MatrixType, VectorType>& _problem);
     
     Phase1OutStatus presolve(const std::string& presolver_method_name);
     LPsolution solve(const std::string& method_name);

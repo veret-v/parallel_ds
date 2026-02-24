@@ -1,37 +1,11 @@
 #include "baseDualSimplex.hpp"
 
 
-bool BaseDualSimplex::minLex(const ValuesVector& a, const ValuesVector& b)
-{
-    size_t min_size = std::min(a.getSize(), b.getSize());
-    
-    for (size_t i = 0; i < min_size; ++i) {
-        const double epsilon = 1e-12;
-        if (std::fabs(a[i] - b[i]) > epsilon) 
-            return a[i] < b[i];
-        
-    } 
-    
-    return a.getSize() < b.getSize();
-}
-
-
-ValuesVector BaseDualSimplex::prepareForLex(const ValuesVector& a, const size_t idx)
-{
-    size_t lex_size = a.getSize() + problem->logicals_size;
-    ValuesVector lex_vector(lex_size);
-
-    for (size_t i = 0; i < lex_size; i++)
-        lex_vector[i] = (i < a.getSize()) ? a[i] : (i == idx + a.getSize()) ? 1 : 0;
-
-    return lex_vector;
-}
-
-
 //----------------------------------------------------------------------------------------
 // Convert string to exiting methods for presolver
 //----------------------------------------------------------------------------------------
-PresolverMethods BaseDualSimplex::stringToPreSolverMethod(
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+PresolverMethods BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::stringToPreSolverMethod(
     const std::string& method_name
 )
 {
@@ -42,7 +16,8 @@ PresolverMethods BaseDualSimplex::stringToPreSolverMethod(
 //----------------------------------------------------------------------------------------
 // Convert string to exiting methods for solver
 //----------------------------------------------------------------------------------------
-SolverMethods BaseDualSimplex::stringToSolverMethod(
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+SolverMethods BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::stringToSolverMethod(
     const std::string& method_name
 )
 {
@@ -53,7 +28,8 @@ SolverMethods BaseDualSimplex::stringToSolverMethod(
 //----------------------------------------------------------------------------------------
 // Dual simplex method: Phase 1(Find dual feasible basis)
 //----------------------------------------------------------------------------------------
-BaseDualSimplex::Phase1OutStatus BaseDualSimplex::presolve(const std::string& presolver_method_name)
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::Phase1OutStatus BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::presolve(const std::string& presolver_method_name)
 {
     std::cout << "Phase 1 : started" << std::endl;
     auto method = stringToPreSolverMethod(presolver_method_name);
@@ -112,7 +88,8 @@ BaseDualSimplex::Phase1OutStatus BaseDualSimplex::presolve(const std::string& pr
 //----------------------------------------------------------------------------------------
 // Choose presolver 
 //----------------------------------------------------------------------------------------
-BaseDualSimplex::Phase1OutStatus BaseDualSimplex::callPresolver(const PresolverMethods method)
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::Phase1OutStatus BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::callPresolver(const PresolverMethods method)
 {
     Phase1OutStatus status;
     switch (method) 
@@ -128,7 +105,8 @@ BaseDualSimplex::Phase1OutStatus BaseDualSimplex::callPresolver(const PresolverM
 //----------------------------------------------------------------------------------------
 // Choose solver 
 //----------------------------------------------------------------------------------------
-bool BaseDualSimplex::callDualSolver(const SolverMethods method)
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+bool BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::callDualSolver(const SolverMethods method)
 {
     bool status;
     switch (method) 
@@ -144,7 +122,8 @@ bool BaseDualSimplex::callDualSolver(const SolverMethods method)
 //----------------------------------------------------------------------------------------
 // Choose priaml solver 
 //----------------------------------------------------------------------------------------
-bool BaseDualSimplex::callPrimalSolver()
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+bool BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::callPrimalSolver()
 {
    return true;
 }
@@ -152,7 +131,8 @@ bool BaseDualSimplex::callPrimalSolver()
 //----------------------------------------------------------------------------------------
 // Dual simplex method: Phase 2(Find solution)
 //----------------------------------------------------------------------------------------
-LPsolution BaseDualSimplex::solve(const std::string& method_name)
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+LPsolution BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::solve(const std::string& method_name)
 {
     std::cout << "Phase 2 : started" << std::endl;
 
@@ -165,7 +145,7 @@ LPsolution BaseDualSimplex::solve(const std::string& method_name)
     auto end = std::chrono::high_resolution_clock::now();
     auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     std::cout << "time = " << duration_ms << std::endl;
-    solution.phase2_time = static_cast<size_t>(duration_ms);
+    solution.phase2_time = static_cast<int>(duration_ms);
     solution.phase2_time = 0;
     
     
@@ -253,20 +233,22 @@ LPsolution BaseDualSimplex::solve(const std::string& method_name)
 //----------------------------------------------------------------------------------------
 // Constructor for solver, additionally finds dual feasible basis
 //----------------------------------------------------------------------------------------
-BaseDualSimplex::BaseDualSimplex(Problem& _problem)
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::BaseDualSimplex(Problem<MatrixType, VectorType>& _problem)
 {
     std::cout << "Solver initialization : started" << std::endl;
 
     problem = &_problem;
 
     non_basis_size = problem->problem_size - problem->constraints_size;
+    basis_size = problem->constraints_size;
     
     basis_indexes = IndexVector(problem->constraints_size);
     non_basis_indexes = IndexVector(non_basis_size);
 
-    for (size_t i = 0; i < non_basis_size; i++)
+    for (int i = 0; i < non_basis_size; i++)
         non_basis_indexes[i] = i;
-    for (size_t i = 0; i < problem->constraints_size; i++)
+    for (int i = 0; i < problem->constraints_size; i++)
         basis_indexes[i] = i + non_basis_size;
 
     std::cout << "Solver initialization : basis columns selected" << std::endl;
@@ -281,7 +263,8 @@ BaseDualSimplex::BaseDualSimplex(Problem& _problem)
 //----------------------------------------------------------------------------------------
 // Init params, setting data according to index arrays
 //----------------------------------------------------------------------------------------
-void BaseDualSimplex::initDualSimplex()
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+void BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::initDualSimplex()
 {
 }
 
@@ -289,7 +272,8 @@ void BaseDualSimplex::initDualSimplex()
 //----------------------------------------------------------------------------------------
 // Set random basis
 //----------------------------------------------------------------------------------------
-void BaseDualSimplex::randomBasis()
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+void BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::randomBasis()
 {
     IndexVector all_indexes(problem->problem_size);
     std::iota(all_indexes.begin(), all_indexes.end(), 0);
@@ -306,7 +290,8 @@ void BaseDualSimplex::randomBasis()
 //----------------------------------------------------------------------------------------
 // Check if costs need perturbation to prevent cycling
 //----------------------------------------------------------------------------------------
-bool BaseDualSimplex::checkPerturbNeed() const
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+bool BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::checkPerturbNeed() const
 {
     std::vector<double> unique_data;
     for (double c_i : problem->costs)
@@ -334,7 +319,8 @@ bool BaseDualSimplex::checkPerturbNeed() const
 // Dipl. Inform. Achim Koberstein. The Dual Simplex Method, Techniques for a fast and 
 // stable implementation: for a fast and stable implementation, November 2005
 //----------------------------------------------------------------------------------------
-void BaseDualSimplex::perturbCosts()
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+void BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::perturbCosts()
 {
     original_costs = problem->costs;
     double magnitude;
@@ -347,7 +333,7 @@ void BaseDualSimplex::perturbCosts()
     double min_perturb  = std::min(1e-2 * EPS_D, PSI);
     double max_perturb  = std::max(1e+3 * EPS_D, PSI * 10 * problem->costs.mean());
 
-    for (size_t i = 0; i < problem->problem_size; i++)
+    for (int i = 0; i < problem->problem_size; i++)
     {
         magnitude = 100 * EPS_D + PSI * problem->costs[i];
 
@@ -378,11 +364,12 @@ void BaseDualSimplex::perturbCosts()
 // Weight for perturbation depends on two goals "keep nonzero count low" and 
 // "resolver degeneracy"
 //----------------------------------------------------------------------------------------
-double BaseDualSimplex::getWeight(const size_t i) const
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+double BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::getWeight(const int i) const
 {
     std::vector<double> weights{0.01, 0.1, 1, 2, 5, 10, 20, 30, 40, 100};
 
-    size_t k;
+    int k;
     if (i > 10)
         k = 9;
     else if (i == 0)
@@ -397,9 +384,10 @@ double BaseDualSimplex::getWeight(const size_t i) const
 //----------------------------------------------------------------------------------------
 // Calc non zero elements in column of matrix A
 //----------------------------------------------------------------------------------------
-size_t BaseDualSimplex::calcNonzeroInColumn(const size_t i) const
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+int BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::calcNonzeroInColumn(const int i) const
 {
-    size_t non_zero_num = 0;
+    int non_zero_num = 0;
     for (auto a_j : problem->A(i))
         if (fabs(a_j) > EPS_A)
             non_zero_num += 1;
@@ -411,7 +399,8 @@ size_t BaseDualSimplex::calcNonzeroInColumn(const size_t i) const
 //----------------------------------------------------------------------------------------
 // Check primal feasibility in solver
 //----------------------------------------------------------------------------------------
-bool BaseDualSimplex::checkPrimalFeasible() const
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+bool BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::checkPrimalFeasible() const
 {
     for (auto i : basis_indexes)
     {
@@ -445,7 +434,8 @@ bool BaseDualSimplex::checkPrimalFeasible() const
 //----------------------------------------------------------------------------------------
 // Check dual feasibility in solver
 //----------------------------------------------------------------------------------------
-bool BaseDualSimplex::checkDualFeasible() const
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+bool BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::checkDualFeasible() const
 {
     for (auto i : non_basis_indexes)
     {
@@ -475,7 +465,8 @@ bool BaseDualSimplex::checkDualFeasible() const
 //----------------------------------------------------------------------------------------
 // Calc dual infeasibility 
 //----------------------------------------------------------------------------------------
-void BaseDualSimplex::calcDualInfeasible()
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+void BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::calcDualInfeasible()
 {
     obj_func_val = 0;
     for (auto i : non_basis_indexes)
@@ -504,9 +495,10 @@ void BaseDualSimplex::calcDualInfeasible()
 //----------------------------------------------------------------------------------------
 // COunt dual infeasibility 
 //----------------------------------------------------------------------------------------
-size_t BaseDualSimplex::counterDualInfeasible() const
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+int BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::counterDualInfeasible() const
 {
-    size_t num = 0;
+    int num = 0;
     for (auto i : non_basis_indexes)
     {
         switch (problem->bound_type[i])
@@ -534,7 +526,10 @@ size_t BaseDualSimplex::counterDualInfeasible() const
 //----------------------------------------------------------------------------------------
 // Calc infeasibility for j basis x
 //----------------------------------------------------------------------------------------
-bool BaseDualSimplex::setDelta(const size_t& j, double& delta, bool& is_lower)
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+bool BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::setDelta(
+    const int& j, double& delta, bool& is_lower
+)
 {
     if ((problem->bound_type[j] == BoundaryType::Boxed || 
         problem->bound_type[j] == BoundaryType::Lower ||
@@ -561,12 +556,15 @@ bool BaseDualSimplex::setDelta(const size_t& j, double& delta, bool& is_lower)
 //----------------------------------------------------------------------------------------
 // Choose candidates for ratio test aka CHUZR1
 //----------------------------------------------------------------------------------------
-bool BaseDualSimplex::setRatioTestCandidates(IndexVector& F,const ValuesVector& tmp_alpha_p)
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+bool BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::setRatioTestCandidates(
+    IndexVector& F,const VectorType& tmp_alpha_p
+)
 {
     F.clear();
-    for (size_t i = 0; i < non_basis_size; i++)
+    for (int i = 0; i < non_basis_size; i++)
     {
-        size_t j = non_basis_indexes[i];
+        int j = non_basis_indexes[i];
         if ((tmp_alpha_p[i] > EPS_ALPHA && fabs(x[j] - problem->lower_bound[j]) < EPS_BOUND  &&
             (problem->bound_type[j] == BoundaryType::Lower || 
             problem->bound_type[j] == BoundaryType::Boxed)) ||

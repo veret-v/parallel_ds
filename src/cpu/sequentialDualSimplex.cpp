@@ -8,7 +8,6 @@ void SequentialDualSimplex::initDualSimplex()
 {
     x = ValuesVector(problem->problem_size);
     d = ValuesVector(problem->problem_size);    
-    AN = problem->A(non_basis_indexes);
     B = problem->A(basis_indexes);
     B_eta_repr.clear();
     linalg::PFIdecompose(B, B_eta_repr);
@@ -120,7 +119,7 @@ bool SequentialDualSimplex::callPrimalSolver()
 ValuesVector SequentialDualSimplex::initBetaWeights()
 {
     ValuesVector beta(problem->constraints_size);
-    for (size_t i = 0; i < problem->constraints_size; i++)
+    for (int i = 0; i < problem->constraints_size; i++)
         beta[i] = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, i), true).norm();
     return beta;
 }
@@ -136,16 +135,41 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
 {
     // (Step 1) Initialization
     Phase1OutStatus status;
+
     ValuesVector y(problem->constraints_size);
-    y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-    d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
-    
+    ValuesVector rho(problem->constraints_size);
+    ValuesVector f(problem->constraints_size);
+    ValuesVector columns_change(problem->constraints_size);
+    ValuesVector beta(problem->constraints_size);
+    ValuesVector alpha(non_basis_size);
+    ValuesVector alpha_q;
+    ValuesVector alpha_tmp(non_basis_size);
+    ValuesVector f_tmp(problem->constraints_size);
+    ValuesVector new_eta_matrix(problem->constraints_size);
+    ValuesVector tau(problem->constraints_size);
+
     IndexVector inf_u_indexes;
     IndexVector inf_l_indexes;
     IndexVector inf_f_indexes;
-    for (size_t i = 0; i < non_basis_size; i++)
+    IndexVector stub_index;
+
+    std::random_device              rd;
+    std::mt19937                    gen(rd());
+    std::uniform_int_distribution<> distrib(0, 1);
+    std::uniform_int_distribution<> non_basis_rand(0, non_basis_size);
+    
+    y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
+    problem->A.dotUpdate(
+        y, stub_index, 
+        problem->costs, 
+        d, -1, 1, 
+        non_basis_indexes, 
+        SpmvOptions::SET_UPDATE_T
+    );
+
+    for (int i = 0; i < non_basis_size; i++)
     {
-        size_t j = non_basis_indexes[i];
+        int j = non_basis_indexes[i];
         if ((problem->bound_type[j] == BoundaryType::Upper || 
             problem->bound_type[j] == BoundaryType::Free) && d[j] > EPS_D)
             inf_u_indexes.push_back(j);
@@ -156,9 +180,8 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
         if (problem->bound_type[j] == BoundaryType::Free && d[j] < -EPS_D)
             inf_f_indexes.push_back(i);
     }
-    
+
     obj_func_val = 0;
-    ValuesVector columns_change(problem->constraints_size);
     for (auto i : inf_l_indexes)
     {
         obj_func_val += d[i];
@@ -171,29 +194,28 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
         columns_change -= problem->A(i);
     }
 
-    ValuesVector f(problem->constraints_size);
     f = linalg::PFIsolve(B_eta_repr, columns_change, false);
-
-    ValuesVector beta(problem->constraints_size);
-    beta = initBetaWeights();
     
-    size_t iteration = 0;
-    size_t cycle_num = 0;
+    beta = initBetaWeights();
+    int iteration = 0;
+    int cycle_num = 0;
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> distrib(0, 1);
-    std::uniform_int_distribution<> non_basis_rand(0, non_basis_size);
-
-    std::unordered_set<size_t> blocked_p;
+    std::unordered_set<int> blocked_p;
     while (true)
     {
         iteration += 1;
+
         if (!perturbed && cycle_num > MAX_CYCLE) 
         {
             perturbCosts();
             y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-            d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
+            problem->A.dotUpdate(
+                y, stub_index, 
+                problem->costs, 
+                d, -1, 1, 
+                non_basis_indexes, 
+                SpmvOptions::SET_UPDATE_T
+            );
         }
 
         // if (cycle_num > RESTART_CYCLE)
@@ -202,21 +224,18 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
         //     break;
         // }
         
-        
         // (Step 2) Pricing
-        size_t p, p_idx;
+        int p, p_idx;
         double max_weight = 0;
-        bool no_candidates =true;
-        for (size_t i = 0; i < problem->constraints_size; i++)
+        for (int i = 0; i < problem->constraints_size; i++)
         {
-            size_t j = basis_indexes[i];
+            int j = basis_indexes[i];
             if (((problem->bound_type[j] != BoundaryType::Free && problem->bound_type[j] != BoundaryType::Upper) && f[i] > EPS_BOUND) ||
                 ((problem->bound_type[j] != BoundaryType::Free && problem->bound_type[j] != BoundaryType::Lower) && f[i] < -EPS_BOUND))
             {
                 double weight_tmp = pow(f[i], 2) / beta[i];
                 if (weight_tmp > max_weight && blocked_p.find(j) == blocked_p.end())
                 {
-                    no_candidates = false;
                     p = j;
                     p_idx = i;
                     max_weight = weight_tmp;
@@ -225,7 +244,7 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
             
         }
 
-        if (checkDualFeasible() || no_candidates)
+        if (checkDualFeasible())
         {
             calcDualInfeasible();
             if (obj_func_val == 0)
@@ -242,16 +261,18 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
         }
         
         // (Step 3) BTran
-        ValuesVector rho(problem->constraints_size);
         rho = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, p_idx), true);
         
         // (Step 4) Pivot row
-        ValuesVector alpha(non_basis_size);
-        alpha = AN.dot(rho, true);
+        problem->A.dotUpdate(
+            rho, stub_index, 
+            problem->costs, 
+            alpha, 1, 0, 
+            non_basis_indexes, 
+            SpmvOptions::FULL_UPDATE_T
+        );
 
         // (Step 5) Ratio Test
-        ValuesVector alpha_tmp(non_basis_size);
-        ValuesVector f_tmp(problem->constraints_size);
         if (f[p_idx] > 0)
         {
             alpha_tmp = -alpha;
@@ -264,9 +285,9 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
         }
         
         IndexVector F, F_reserved;
-        for (size_t i = 0; i < non_basis_indexes.size(); i++)
+        for (int i = 0; i < non_basis_indexes.size(); i++)
         {
-            size_t j = non_basis_indexes[i];
+            int j = non_basis_indexes[i];
             if (((d[j] >= 0 && alpha_tmp[i] > EPS_A) ||
                 (d[j] <= 0 && alpha_tmp[i] < -EPS_A)))
                 F.push_back(i);                
@@ -286,12 +307,12 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
         if (blocked_p.size())
             blocked_p.clear();
         
-        size_t q_idx = F[0];
-        size_t q = non_basis_indexes[q_idx];;
+        int q_idx = F[0];
+        int q = non_basis_indexes[q_idx];;
         double theta = d[q] / alpha_tmp[q_idx];
         for (auto i : F)
         {   
-            size_t j = non_basis_indexes[i];
+            int j = non_basis_indexes[i];
             double theta_tmp = d[j] / alpha_tmp[i];
             if (theta_tmp < theta || (fabs(theta_tmp - theta) < EPS_Z && distrib(gen) == 1)) 
             {
@@ -312,12 +333,9 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
         theta = d[q] / alpha[q_idx];
         
         // (Step 6) FTran
-        ValuesVector alpha_q;
-        alpha_q = linalg::PFIsolve(B_eta_repr, AN(q_idx), false);
+        alpha_q = linalg::PFIsolve(B_eta_repr, problem->A(q), false);
 
-
-        y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-        if (iteration % REFACT_FREQ == 0 || fabs(y.dot(AN(q_idx)) - problem->costs(basis_indexes).dot(alpha_q)) > REFACT_ERR)
+        if (iteration % REFACT_FREQ == 0)
         {
             B_eta_repr.clear();
             linalg::PFIdecompose(B, B_eta_repr);
@@ -325,20 +343,19 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
 
         // (Step 7) Basis change and update
         obj_func_val = obj_func_val - theta * f[p_idx];
-        for (size_t i = 0; i < non_basis_indexes.size(); i++)
+        double step = theta * f[p_idx];
+        for (int i = 0; i < non_basis_indexes.size(); i++)
         {
-            size_t j = non_basis_indexes[i];
+            int j = non_basis_indexes[i];
             d[j] -= theta * alpha[i];    
         }
         d[p] = -theta;
         d[q] = 0;
         
-        ValuesVector new_eta_matrix(problem->constraints_size);
-        ValuesVector tau(problem->constraints_size);
         tau = linalg::PFIsolve(B_eta_repr, rho, false);
-        for (size_t i = 0; i < problem->constraints_size; i++)
+        for (int i = 0; i < problem->constraints_size; i++)
         {
-            size_t j = basis_indexes[i];
+            int j = basis_indexes[i];
             f[i] = (i != p_idx) ? f[i] - alpha_q[i] / alpha_q[p_idx] * f[p_idx] : f[p_idx];
             new_eta_matrix[i] = (i != p_idx) ? -alpha_q[i] / alpha_q[p_idx] : 1 / alpha_q[p_idx]; 
             beta[i] = (i != p_idx) ? beta[i] - 2 * alpha_q[i] / alpha_q[p_idx] * tau[i]  + pow(alpha_q[i] / alpha_q[p_idx], 2) * beta[p_idx] : beta[i]; 
@@ -349,13 +366,12 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
         basis_indexes[p_idx] =  q;
         non_basis_indexes[q_idx] = p;
     
-        B.swapColumn(AN, p_idx, q_idx);
         B_eta_repr.push_back(EtaMatrix(new_eta_matrix, p_idx));
 
         inf_f_indexes.clear();
-        for (size_t i = 0; i < non_basis_size; i++)
+        for (int i = 0; i < non_basis_size; i++)
         {
-            size_t j = non_basis_indexes[i];
+            int j = non_basis_indexes[i];
             if (problem->bound_type[j] == BoundaryType::Free && d[j] < 0)
                 inf_f_indexes.push_back(i);
         }
@@ -367,128 +383,9 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::minimizeDualInfeas
             cycle_num = 0;
 
         #ifdef DEBUG
-        std::cout << iteration << " : Z = "<< obj_func_val << " inf_num = " << counterDualInfeasible() << " p = " << p << " q = " << q << std::endl;  
+        std::cout << iteration << " : Z = "<< obj_func_val << " inf_num = " << counterDualInfeasible() << std::endl;  
         #endif
-    }
-    return status;
-}
-
-
-//----------------------------------------------------------------------------------------
-// Phase 1 method for finding dual fesaible basis, based on article:
-// P. Q. Pan. The most-obtuse-angle row pivot rule for achieving dual feasibility:
-// a computational study. European Journal of Operations Research, 101(1):167–
-// 176, 1997.
-//----------------------------------------------------------------------------------------
-SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::panMathod()
-{
-    // (Step 1) Initialization
-    ValuesVector y(problem->constraints_size);
-    y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-    d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
-    Phase1OutStatus status;
-
-    while (true)
-    {
-        // (Step 2) Select enetring variable
-        IndexVector infeasibility_indexes;
-        for (size_t i = 0; i < non_basis_size; i++)
-        {
-            size_t j = non_basis_indexes[i];
-            if ((problem->bound_type[j] == BoundaryType::Upper || 
-                problem->bound_type[j] == BoundaryType::Free) && d[j] > 0)
-                infeasibility_indexes.push_back(i);
-            else if ((problem->bound_type[j] == BoundaryType::Lower || 
-                problem->bound_type[j] == BoundaryType::Free) && d[j] < 0)
-                infeasibility_indexes.push_back(i);
-        }
-
-        if (checkDualFeasible())
-        {
-            calcDualInfeasible();
-            status = Phase1OutStatus::Solved;
-            break;
-        }
-
-        size_t q_idx = infeasibility_indexes[0];
-        size_t q = non_basis_indexes[q_idx];
-        double d_max = d[q];
-        for (auto i : infeasibility_indexes)
-        {
-            size_t j = non_basis_indexes[i];
-            if (fabs(d[j]) > fabs(d_max))
-            {
-                q_idx = i;
-                q = j;
-                d_max = d[j];
-            }
-        }
         
-        // (Step 3) FTran
-        ValuesVector alpha_q;
-        alpha_q = linalg::PFIsolve(B_eta_repr, AN(q_idx), false);
-
-       
-        // (Step 4) Select leaving variable
-        IndexVector check_indexes;
-        for (size_t i = 0; i < problem->constraints_size; i++)
-        {
-            size_t j = basis_indexes[i];
-            if (((problem->bound_type[j] == BoundaryType::Lower || problem->bound_type[j] == BoundaryType::Fixed) && alpha_q[i] < 0) ||
-                ((problem->bound_type[j] == BoundaryType::Upper || problem->bound_type[j] == BoundaryType::Fixed) && alpha_q[i] > 0))
-                check_indexes.push_back(i);
-        }
-
-        if (!check_indexes.size())
-        {
-            solution.solved = false;
-            solution.message = "dual infeasible";
-            status = Phase1OutStatus::DualInfeas;
-            break;
-        }
-        
-        size_t p_idx = check_indexes[0];
-        size_t p = basis_indexes[p_idx];       
-        double alpha_q_tmp = alpha_q[p_idx];
-        for (auto i : check_indexes)
-        {
-            if (fabs(alpha_q[i]) >= fabs(alpha_q_tmp))
-            {
-                p = basis_indexes[i];
-                p_idx = i;
-                alpha_q_tmp = alpha_q[i];
-            } 
-        }
-
-        // (Step 5) BTran
-        ValuesVector rho(problem->constraints_size);
-        rho = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, p_idx), true);
-
-        // (Step 6) Pivot row
-        ValuesVector alpha(non_basis_size);
-        alpha = AN.dot(rho, true);
-
-        double  theta = d[q] / alpha[q_idx];
-
-        // (Step 7) Basis change and update
-        for (size_t i = 0; i < non_basis_indexes.size(); i++)
-        {
-            size_t j = non_basis_indexes[i];
-            d[j] -= theta * alpha[i];       
-        }
-        d[p] = -theta;
-        d[q] = 0;
-
-        ValuesVector new_eta_matrix(problem->constraints_size);
-        for (size_t i = 0; i < problem->constraints_size; i++)
-            new_eta_matrix[i] = (i != p_idx) ? -alpha_q[i] / alpha_q[p_idx] : 1 / alpha_q[p_idx];
-
-        basis_indexes[p_idx] =  q;
-        non_basis_indexes[q_idx] = p;
-      
-        B.swapColumn(AN, p_idx, q_idx);
-        B_eta_repr.push_back(EtaMatrix(new_eta_matrix, p_idx));
-
     }
     return status;
 }
@@ -501,20 +398,45 @@ SequentialDualSimplex::Phase1OutStatus SequentialDualSimplex::panMathod()
 //----------------------------------------------------------------------------------------
 bool SequentialDualSimplex::elaboratedMethod()
 {
-    
-
     // (Step 1) Initialization
     ValuesVector y(problem->constraints_size);
     ValuesVector beta(problem->constraints_size);
+    ValuesVector rho(problem->constraints_size);
+    ValuesVector alpha_p(non_basis_size);
+    ValuesVector tmp_alpha_p(non_basis_size);
+    ValuesVector alpha_q(basis_size);
+    ValuesVector column_change(problem->constraints_size);
+    ValuesVector delta_xB(basis_size);
+    ValuesVector tau(problem->constraints_size);
+    ValuesVector new_eta_matrix(problem->constraints_size);
 
-    problem->RHS = problem->RHS - AN.dot(x(non_basis_indexes), false);
+    IndexVector stub_index;
+ 
+    std::random_device              rd;
+    std::mt19937                    gen(rd());
+    std::uniform_int_distribution<> distrib(0, 1);
+    std::uniform_int_distribution<> non_basis_rand(0, non_basis_size);
+
+    problem->A.dotUpdate(
+        x, non_basis_indexes, 
+        problem->RHS, 
+        problem->RHS, -1, 1, 
+        non_basis_indexes, 
+        SpmvOptions::FULL_UPDATE
+    );
     x.setValues(linalg::PFIsolve(B_eta_repr, problem->RHS, false), basis_indexes);
     y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-    d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
+    problem->A.dotUpdate(
+        y, non_basis_indexes, 
+        problem->costs, 
+        d, -1, 1, 
+        non_basis_indexes, 
+        SpmvOptions::SET_UPDATE_T
+    );
     obj_func_val = problem->costs.dot(x);
-    beta = initBetaWeights();
-    size_t iteration = 0;
-    size_t cycle_num = 0;
+
+    int iteration = 0;
+    int cycle_num = 0;
 
     while (true)
     {
@@ -522,16 +444,22 @@ bool SequentialDualSimplex::elaboratedMethod()
         {
             perturbCosts();
             y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-            d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
+            problem->A.dotUpdate(
+                y, non_basis_indexes, 
+                problem->costs, 
+                d, -1, 1, 
+                non_basis_indexes, 
+                SpmvOptions::SET_UPDATE_T
+            );
             obj_func_val = problem->costs.dot(x);
         }
         #ifdef DEBUG
-        std::cout << iteration << " : Z = "<< obj_func_val << std::endl;
+            std::cout << iteration << " : Z = "<< obj_func_val << std::endl;
         #endif
         // (Step 2) Pricing
         double delta;
-        size_t p;
-        size_t p_idx;
+        int p;
+        int p_idx;
 
         if (checkPrimalFeasible())
         {
@@ -542,9 +470,9 @@ bool SequentialDualSimplex::elaboratedMethod()
         
         bool is_lower = false;
         double max_weight = 0;
-        for (size_t i = 0; i < problem->constraints_size; i++)
+        for (int i = 0; i < problem->constraints_size; i++)
         {
-            size_t j = basis_indexes[i];
+            int j = basis_indexes[i];
             double delta_tmp = 0;
             bool is_lower_tmp; 
            
@@ -579,12 +507,16 @@ bool SequentialDualSimplex::elaboratedMethod()
         }
         
         // (Step 3) BTran
-        ValuesVector rho(problem->constraints_size);
         rho = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, p_idx), true);
 
         // (Step 4) Pivot row
-        ValuesVector alpha_p(non_basis_size);
-        alpha_p = AN.dot(rho, true);
+        problem->A.dotUpdate(
+            rho, stub_index, 
+            problem->costs, 
+            alpha_p, 1, 0, 
+            non_basis_indexes, 
+            SpmvOptions::FULL_UPDATE_T
+        );
 
         // (Step 5) Ratio Test
         ValuesVector tmp_alpha_p(non_basis_size);
@@ -593,9 +525,9 @@ bool SequentialDualSimplex::elaboratedMethod()
         tmp_alpha_p = (is_lower) ? -alpha_p : alpha_p;
 
         IndexVector F;
-        for (size_t i = 0; i < non_basis_size; i++)
+        for (int i = 0; i < non_basis_size; i++)
         {
-            size_t j = non_basis_indexes[i];
+            int j = non_basis_indexes[i];
             if ((tmp_alpha_p[i] > EPS_ALPHA && fabs(x[j] - problem->lower_bound[j]) < EPS_BOUND  &&
                 (problem->bound_type[j] == BoundaryType::Lower || 
                 problem->bound_type[j] == BoundaryType::Boxed)) ||
@@ -606,19 +538,19 @@ bool SequentialDualSimplex::elaboratedMethod()
                 F.push_back(i);
         }
 
-        size_t q_idx, q;
+        int q_idx, q;
         double theta;
         while (F.size() && delta >= 0)
         {
-            size_t it = 0;
+            int it = 0;
             q_idx = F[0];
             q = non_basis_indexes[q_idx];
             theta = (d[q] / tmp_alpha_p[q_idx]);
             for (auto i : F)
             {   
-                size_t j = non_basis_indexes[i];
+                int j = non_basis_indexes[i];
                 double theta_tmp = d[j] / tmp_alpha_p[i];
-                if (theta_tmp < theta || (theta_tmp == theta && minLex(prepareForLex(AN(i), j), prepareForLex(AN(q_idx), q))))
+                if (theta_tmp < theta || ((fabs(theta_tmp - theta) < EPS_Z && distrib(gen) == 1)))
                 {
                     theta = theta_tmp;
                     q = j;
@@ -646,8 +578,7 @@ bool SequentialDualSimplex::elaboratedMethod()
         }
 
         // (Step 6) FTran
-        ValuesVector alpha_q;
-        alpha_q = linalg::PFIsolve(B_eta_repr, AN(q_idx), false);
+        alpha_q = linalg::PFIsolve(B_eta_repr, problem->A(q), false);
 
         // (Step 7) Basis change and update
 
@@ -656,9 +587,9 @@ bool SequentialDualSimplex::elaboratedMethod()
         IndexVector infeas_idx;
         double delta_z = 0;
 
-        for (size_t i = 0; i < non_basis_indexes.size(); i++)
+        for (int i = 0; i < non_basis_indexes.size(); i++)
         {
-            size_t j = non_basis_indexes[i];
+            int j = non_basis_indexes[i];
             d[j] = d[j] - theta * alpha_p[i];  
             if (problem->bound_type[j] == BoundaryType::Boxed)
             {
@@ -666,13 +597,13 @@ bool SequentialDualSimplex::elaboratedMethod()
                 if (x[j] == problem->lower_bound[j] && d[j] < 0)
                 {
                     infeas_idx.push_back(j);
-                    column_change += AN(i) * (problem->upper_bound[j] - problem->lower_bound[j]);
+                    column_change += problem->A(j) * (problem->upper_bound[j] - problem->lower_bound[j]);
                     delta_z += problem->costs[j] * (problem->upper_bound[j] - problem->lower_bound[j]);
                 }  
                 else if (x[j] == problem->upper_bound[j] && d[j] > 0)
                 {
                     infeas_idx.push_back(j);
-                    column_change -= AN(i) * (problem->upper_bound[j] - problem->lower_bound[j]);
+                    column_change -= problem->A(j) * (problem->upper_bound[j] - problem->lower_bound[j]);
                     delta_z -= problem->costs[j] * (problem->upper_bound[j] - problem->lower_bound[j]);
                 }   
             }          
@@ -685,9 +616,9 @@ bool SequentialDualSimplex::elaboratedMethod()
         {
             delta_xB = linalg::PFIsolve(B_eta_repr, column_change, false);
             x.setValues(x(basis_indexes) - delta_xB, basis_indexes);
-            for (size_t i = 0; i < problem->constraints_size; i++)
+            for (int i = 0; i < problem->constraints_size; i++)
             {
-                size_t j = basis_indexes[i];
+                int j = basis_indexes[i];
                 delta_z -= problem->costs[j] * delta_xB[i];
             }    
         }
@@ -699,9 +630,9 @@ bool SequentialDualSimplex::elaboratedMethod()
         ValuesVector new_eta_matrix(problem->constraints_size);
         ValuesVector tau(problem->constraints_size);
         tau = linalg::PFIsolve(B_eta_repr, rho, false);
-        for (size_t i = 0; i < problem->constraints_size; i++)
+        for (int i = 0; i < problem->constraints_size; i++)
         {
-            size_t j = basis_indexes[i];
+            int j = basis_indexes[i];
             x[j] = x[j] - theta_P * alpha_q[i];  
             new_eta_matrix[i] = (i != p_idx) ? -alpha_q[i] / alpha_q[p_idx] : 1 / alpha_q[p_idx]; 
             beta[i] = (i != p_idx) ? beta[i] - 2 * alpha_q[i] / alpha_q[p_idx] * tau[i]  + pow(alpha_q[i] / alpha_q[p_idx], 2) * beta[p_idx] : beta[i]; 
@@ -709,10 +640,10 @@ bool SequentialDualSimplex::elaboratedMethod()
         beta[p_idx] = beta[p_idx] / pow(alpha_q[p_idx], 2);
         x[q] = x[q] + theta_P;
        
-       // Update basis
+        // Update basis
         basis_indexes[p_idx] =  q;
         non_basis_indexes[q_idx] = p;
-        B.swapColumn(AN, p_idx, q_idx);
+
         B_eta_repr.push_back(EtaMatrix(new_eta_matrix, p_idx));
 
         // Flip bounds
@@ -732,156 +663,3 @@ bool SequentialDualSimplex::elaboratedMethod()
     return solution.solved;
 }
 
-
-//----------------------------------------------------------------------------------------
-// Phase 2 simple method for finding solution, based on article:
-// Dipl. Inform. Achim Koberstein. The Dual Simplex Method, Techniques for a fast and 
-// stable implementation: for a fast and stable implementation, November 2005
-//----------------------------------------------------------------------------------------
-bool SequentialDualSimplex::simpleRatioMethod()
-{
-    auto start = std::chrono::high_resolution_clock::now();
-    // (Step 1) Initialization
-    ValuesVector y(problem->constraints_size);
-
-    AN.dot(x(non_basis_indexes), false).show();
-    AN.dot(x(non_basis_indexes), false).show();
-    AN.dot(x(non_basis_indexes), false).show();
-    AN.dot(x(non_basis_indexes), false).show();
-    // (problem->RHS - AN.dot(x(non_basis_indexes), false)).show();
-    x.setValues(linalg::PFIsolve(B_eta_repr, problem->RHS - AN.dot(x(non_basis_indexes), false), false), basis_indexes);
-    y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-    d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
-    obj_func_val = problem->costs.dot(x);
-
-    size_t iteration = 0;
-    while (true)
-    {
-        #ifdef DEBUG
-        std::cout << iteration << " : Z = "<< obj_func_val << std::endl;
-        #endif
-        // (Step 2) Pricing
-        double delta;
-        size_t p;
-        size_t p_idx;
-        bool is_lower = false;
-
-        if (checkPrimalFeasible())
-        {
-            solution.solved = true;
-            solution.message = "optimal solution";
-            break;
-        }
-            
-
-        for (size_t i = 0; i < problem->constraints_size; i++)
-        {
-            p = basis_indexes[i];
-            p_idx = i;
-            if ((problem->bound_type[p] == BoundaryType::Boxed || 
-                problem->bound_type[p] == BoundaryType::Lower ||
-                problem->bound_type[p] == BoundaryType::Fixed ) && 
-                problem->lower_bound[p] - x[p] > EPS_BOUND)
-            {
-                is_lower = true;
-                delta = x[p] - problem->lower_bound[p];
-                break;
-            } 
-            else if ((problem->bound_type[p] == BoundaryType::Boxed || 
-                      problem->bound_type[p] == BoundaryType::Upper ||
-                      problem->bound_type[p] == BoundaryType::Fixed ) && 
-                      x[p] - problem->upper_bound[p] > EPS_BOUND)
-            {
-                delta = x[p] - problem->upper_bound[p];
-                break;
-            }
-        }
-        
-        // (Step 3) BTran
-        ValuesVector rho(problem->constraints_size);
-        rho = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, p_idx), true);
-       
-        // (Step 4) Pivot row
-        ValuesVector alpha_p(non_basis_size);
-        alpha_p = AN.dot(rho, true);
-
-        // (Step 5) Ratio Test
-        ValuesVector tmp_alpha_p(non_basis_size);
-        if (is_lower)
-            tmp_alpha_p = -alpha_p;
-        else
-            tmp_alpha_p = alpha_p;
-
-        IndexVector F;
-        for (size_t i = 0; i < non_basis_size; i++)
-        {
-            size_t j = non_basis_indexes[i];
-            if ((tmp_alpha_p[i] > EPS_ALPHA && fabs(x[j] - problem->lower_bound[j]) < EPS_BOUND  &&
-                (problem->bound_type[j] == BoundaryType::Lower || 
-                problem->bound_type[j] == BoundaryType::Boxed)) ||
-                (tmp_alpha_p[i] < -EPS_ALPHA && fabs(x[j] - problem->upper_bound[j]) < EPS_BOUND && 
-                (problem->bound_type[j] == BoundaryType::Upper || 
-                problem->bound_type[j] == BoundaryType::Boxed)) ||
-                problem->bound_type[j] == BoundaryType::Free)
-                F.push_back(i);
-        }
-
-        if (F.size() == 0)
-        {
-            solution.solved = false;
-            solution.message = "dual unbounded";
-            break;
-        }
-        
-        size_t q = non_basis_indexes[F[0]];
-        size_t q_idx = F[0];
-        double theta = (d[q] / tmp_alpha_p[q_idx]);
-        for (auto i : F)
-        {   
-            size_t j = non_basis_indexes[i];
-            double theta_tmp = d[j] / tmp_alpha_p[i];
-            if (theta_tmp < theta || (theta_tmp == theta && minLex(prepareForLex(AN(i), j), prepareForLex(AN(q_idx), q))))
-            {
-                theta = theta_tmp;
-                q = j;
-                q_idx = i;
-            }
-        }
-        theta = d[q] / alpha_p[q_idx];
-
-        // (Step 6) FTran
-        ValuesVector alpha_q;
-        alpha_q = linalg::PFIsolve(B_eta_repr, AN(q_idx), false);
-
-
-        // (Step 7) Basis change and update
-        obj_func_val += theta * delta;
-        for (size_t i = 0; i < non_basis_indexes.size(); i++)
-        {
-            size_t j = non_basis_indexes[i];
-            d[j] = d[j] - theta * alpha_p[i];    
-        }
-        d[p] = -theta;
-        d[q] = 0;
-
-        double theta_P = delta / alpha_q[p_idx];
-        ValuesVector new_eta_matrix(problem->constraints_size);
-        for (size_t i = 0; i < problem->constraints_size; i++)
-        {
-            size_t j = basis_indexes[i];
-            x[j] = x[j] - theta_P * alpha_q[i];  
-            new_eta_matrix[i] = (i != p_idx) ? -alpha_q[i] / alpha_q[p_idx] : 1 / alpha_q[p_idx]; 
-        }  
-        x[q] = x[q] + theta_P;
-
-        basis_indexes[p_idx] =  q;
-        non_basis_indexes[q_idx] = p;
-
-        B.swapColumn(AN, p_idx, q_idx);
-        B_eta_repr.push_back(EtaMatrix(new_eta_matrix, p_idx));
-
-        iteration += 1;
-    }
-   
-    return solution.solved;
-}

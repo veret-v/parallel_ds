@@ -9,25 +9,26 @@ void CudaDualSimplex::initDualSimplex()
     x = ValuesVector(problem->problem_size);
     d = ValuesVector(problem->problem_size);   
 
-    AN = problem->A(non_basis_indexes);
-    B = problem->A(basis_indexes);
+    // начальная базисная матрица является единичной, так как в 
+    // качсетве базиса берутся basis_size последних колонок матрицы A, 
+    // а они в свою очередь созданы добавление slack-variables
+    B.initI(basis_size); 
 
-    device_AN = CudaSparseMatrix(AN);
-    device_B = CudaSparseMatrix(B);
-
-    device_xB = CudaDenseVector(x(basis_indexes));
-    device_xN = CudaDenseVector(x(non_basis_indexes));
-
-    device_dB = CudaDenseVector(d(basis_indexes));
-    device_dN = CudaDenseVector(d(non_basis_indexes));
-
-    cusolverSpCreate(&sl_handle);
-    cusolverRfCreate(&rf_handle);
     cusparseCreate(&sp_handle);
     cublasCreate(&cu_handle);
 
-    device_B.LUdecompose(sl_handle, B_repr);
-    B_repr.setup(rf_handle, device_B);
+    cudssCreate(&cudss_handle);
+    cudssDataCreate(cudss_handle, &cudss_data);
+    cudssConfigCreate(&cudss_config);
+
+    cudssCreate(&cudss_handle_T);
+    cudssDataCreate(cudss_handle_T, &cudss_data_T);
+    cudssConfigCreate(&cudss_config_T);
+
+    B.LUdecompose(
+        cudss_handle, cudss_config, cudss_data,
+        cudss_handle, cudss_config, cudss_data
+    );
 }
 
 //----------------------------------------------------------------------------------------
@@ -124,16 +125,45 @@ bool CudaDualSimplex::callPrimalSolver()
 //----------------------------------------------------------------------------------------
 void CudaDualSimplex::initBetaWeights()
 {
-    ValuesVector beta(problem->constraints_size);
-    for (size_t i = 0; i < problem->constraints_size; i++)
-    {
-        CudaDenseVector sol;
-        B_repr.solve(rf_handle, linalg::unit(problem->constraints_size, i), sol , true);
-        beta[i] = sol.norm(cu_handle);
-    }
-    device_beta = CudaDenseVector()
+    ValuesVector beta(basis_size);
+    for (int i = 0; i < basis_size; i++)
+        beta[i] = 1;
 }
 
+//----------------------------------------------------------------------------------------
+// Solve system of linear equations by LU factorization and PFI updates.
+// PBQ = LU -> B = P^-1LUQ^-1, 
+// after column swap B0 -> B1 = E1 * B0 = E1 * P^-1LUQ^-1 - this is LU + PFI
+//----------------------------------------------------------------------------------------
+void CudaDualSimplex::solveLinSys(
+    const bool transpose, 
+    const CudaDataDenseVector& rhs, 
+    CudaDataDenseVector& sol
+)
+{
+    if (transpose)
+    {
+        pfi_factor.applyPFI(
+            cu_handle, rhs, 
+            sol, transpose
+        );
+        B.solve(
+            cudss_handle_T, cudss_config_T, 
+            cudss_data_T, rhs, sol, transpose
+        );
+    }
+    else
+    {
+        B.solve(
+            cudss_handle, cudss_config, 
+            cudss_data, rhs, sol, transpose
+        );
+        pfi_factor.applyPFI(
+            cu_handle, rhs, 
+            sol, transpose
+        );
+    }
+}
 
 //----------------------------------------------------------------------------------------
 // Phase 1 method for finding dual fesaible basis, based on article:
@@ -144,17 +174,46 @@ void CudaDualSimplex::initBetaWeights()
 CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
 {
     // (Step 1) Initialization
-    Phase1OutStatus status;
-    ValuesVector y(problem->constraints_size);
-    y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-    d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
+    Phase1OutStatus     status;
+
+    CudaIndexVector     stub_index;
+    CudaIndexVector     stub_val;
+
+    CudaDataDenseVector columns_change(basis_size);
+    CudaDataDenseVector rho(basis_size);
+    CudaDataDenseVector y(basis_size);
+    CudaDataDenseVector rhs(basis_size);
+    CudaDataDenseVector alpha(non_basis_size);
+    CudaDataDenseVector alpha_tmp(non_basis_size);
+    CudaDataDenseVector f_tmp(basis_size);
+    CudaDataDenseVector f(basis_size);
+    CudaDataDenseVector alpha_q(basis_size);
+    CudaDataDenseVector tau(basis_size);
+
+    CudaDataDenseVector new_eta_matrix(basis_size);
+
+    IndexVector         inf_u_indexes;
+    IndexVector         inf_l_indexes;
+    IndexVector         inf_f_indexes;
+
+    rhs.updateByPartialVec(problem->costs, basis_indexes);
+    rhs.updateDeviceMem();
+    solveLinSys(true, rhs, y);
+
+    problem->A.dotUpdate(
+        sp_handle, 
+        y, stub_index, false, 
+        problem->costs, d, 
+        non_basis_indexes, 
+        non_basis_indexes.getSize(), 
+        1, -1, non_basis_indexes, 
+        SpmvOptions::SET_UPDATE_T
+    );
+    d.updateHostMem();
     
-    IndexVector inf_u_indexes;
-    IndexVector inf_l_indexes;
-    IndexVector inf_f_indexes;
-    for (size_t i = 0; i < non_basis_size; i++)
+    for (int i = 0; i < non_basis_size; i++)
     {
-        size_t j = non_basis_indexes[i];
+        int j = non_basis_indexes[i];
         if ((problem->bound_type[j] == BoundaryType::Upper || 
             problem->bound_type[j] == BoundaryType::Free) && d[j] > EPS_D)
             inf_u_indexes.push_back(j);
@@ -167,42 +226,55 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
     }
     
     obj_func_val = 0;
-    ValuesVector columns_change(problem->constraints_size);
+    
     for (auto i : inf_l_indexes)
     {
         obj_func_val += d[i];
-        columns_change += problem->A(i);
+        columns_change.addSparseCol(problem->A, i, 1);
     }
 
     for (auto i : inf_u_indexes)
     {
         obj_func_val += d[i];
-        columns_change -= problem->A(i);
+        columns_change.addSparseCol(problem->A, i, -1);
     }
 
-    ValuesVector f(problem->constraints_size);
-    f = linalg::PFIsolve(B_eta_repr, columns_change, false);
+    columns_change.updateDeviceMem();
+    solveLinSys(false, columns_change, f);
+    f.updateHostMem();
 
-    ValuesVector beta(problem->constraints_size);
-    beta = initBetaWeights();
+    initBetaWeights();
     
-    size_t iteration = 0;
-    size_t cycle_num = 0;
+    int iteration = 0;
+    int cycle_num = 0;
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    std::random_device              rd;
+    std::mt19937                    gen(rd());
     std::uniform_int_distribution<> distrib(0, 1);
     std::uniform_int_distribution<> non_basis_rand(0, non_basis_size);
 
-    std::unordered_set<size_t> blocked_p;
+    std::unordered_set<int> blocked_p;
     while (true)
     {
         iteration += 1;
         if (!perturbed && cycle_num > MAX_CYCLE) 
         {
             perturbCosts();
-            y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-            d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
+
+            rhs.updateByPartialVec(problem->costs, basis_indexes);
+            rhs.updateDeviceMem();
+            solveLinSys(true, rhs, y);
+
+            problem->A.dotUpdate(
+                sp_handle, 
+                y, stub_index, false, 
+                problem->costs, d, 
+                non_basis_indexes, 
+                non_basis_indexes.getSize(), 
+                1, -1, non_basis_indexes, 
+                SpmvOptions::SET_UPDATE_T
+            );
+            d.updateHostMem();
         }
 
         // if (cycle_num > RESTART_CYCLE)
@@ -213,12 +285,12 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
         
         
         // (Step 2) Pricing
-        size_t p, p_idx;
+        int p, p_idx;
         double max_weight = 0;
         bool no_candidates =true;
-        for (size_t i = 0; i < problem->constraints_size; i++)
+        for (int i = 0; i < basis_size; i++)
         {
-            size_t j = basis_indexes[i];
+            int j = basis_indexes[i];
             if (((problem->bound_type[j] != BoundaryType::Free && problem->bound_type[j] != BoundaryType::Upper) && f[i] > EPS_BOUND) ||
                 ((problem->bound_type[j] != BoundaryType::Free && problem->bound_type[j] != BoundaryType::Lower) && f[i] < -EPS_BOUND))
             {
@@ -251,16 +323,23 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
         }
         
         // (Step 3) BTran
-        ValuesVector rho(problem->constraints_size);
-        rho = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, p_idx), true);
+        rhs.initUnitVec(p_idx);
+        rhs.updateDeviceMem();
+        solveLinSys(true, rhs, rho);
         
         // (Step 4) Pivot row
-        ValuesVector alpha(non_basis_size);
-        alpha = AN.dot(rho, true);
-
+        problem->A.dotUpdate(
+            sp_handle, 
+            rho, stub_index, false, 
+            rho, alpha, 
+            non_basis_indexes, 
+            non_basis_indexes.getSize(), 
+            0, 1, non_basis_indexes, 
+            SpmvOptions::FULL_UPDATE_T
+        );
+        alpha.updateHostMem();
+       
         // (Step 5) Ratio Test
-        ValuesVector alpha_tmp(non_basis_size);
-        ValuesVector f_tmp(problem->constraints_size);
         if (f[p_idx] > 0)
         {
             alpha_tmp = -alpha;
@@ -273,9 +352,9 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
         }
         
         IndexVector F, F_reserved;
-        for (size_t i = 0; i < non_basis_indexes.size(); i++)
+        for (int i = 0; i < non_basis_indexes.getSize(); i++)
         {
-            size_t j = non_basis_indexes[i];
+            int j = non_basis_indexes[i];
             if (((d[j] >= 0 && alpha_tmp[i] > EPS_A) ||
                 (d[j] <= 0 && alpha_tmp[i] < -EPS_A)))
                 F.push_back(i);                
@@ -295,12 +374,12 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
         if (blocked_p.size())
             blocked_p.clear();
         
-        size_t q_idx = F[0];
-        size_t q = non_basis_indexes[q_idx];;
+        int q_idx = F[0];
+        int q = non_basis_indexes[q_idx];;
         double theta = d[q] / alpha_tmp[q_idx];
         for (auto i : F)
         {   
-            size_t j = non_basis_indexes[i];
+            int j = non_basis_indexes[i];
             double theta_tmp = d[j] / alpha_tmp[i];
             if (theta_tmp < theta || (fabs(theta_tmp - theta) < EPS_Z && distrib(gen) == 1)) 
             {
@@ -321,33 +400,37 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
         theta = d[q] / alpha[q_idx];
         
         // (Step 6) FTran
-        ValuesVector alpha_q;
-        alpha_q = linalg::PFIsolve(B_eta_repr, AN(q_idx), false);
+        problem->A.getColumn(q_idx, rhs);
+        rhs.updateDeviceMem();
+        solveLinSys(false, rhs, alpha_q);
+        alpha_q.updateHostMem();
 
-
-        y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-        if (iteration % REFACT_FREQ == 0 || fabs(y.dot(AN(q_idx)) - problem->costs(basis_indexes).dot(alpha_q)) > REFACT_ERR)
+        if (iteration % REFACT_FREQ == 0)
         {
-            B_eta_repr.clear();
-            linalg::PFIdecompose(B, B_eta_repr);
+            pfi_factor.resetPFI();
+            B.LUdecompose(
+                cudss_handle, cudss_config, cudss_data,
+                cudss_handle, cudss_config, cudss_data
+            );
         }
 
         // (Step 7) Basis change and update
         obj_func_val = obj_func_val - theta * f[p_idx];
-        for (size_t i = 0; i < non_basis_indexes.size(); i++)
+        for (int i = 0; i < non_basis_indexes.getSize(); i++)
         {
-            size_t j = non_basis_indexes[i];
+            int j = non_basis_indexes[i];
             d[j] -= theta * alpha[i];    
         }
         d[p] = -theta;
         d[q] = 0;
         
-        ValuesVector new_eta_matrix(problem->constraints_size);
-        ValuesVector tau(problem->constraints_size);
-        tau = linalg::PFIsolve(B_eta_repr, rho, false);
-        for (size_t i = 0; i < problem->constraints_size; i++)
+        
+        solveLinSys(false, rho, tau);
+        tau.updateHostMem();
+        // todo : оформить цикл в ядра 
+        for (int i = 0; i < basis_size; i++)
         {
-            size_t j = basis_indexes[i];
+            int j = basis_indexes[i];
             f[i] = (i != p_idx) ? f[i] - alpha_q[i] / alpha_q[p_idx] * f[p_idx] : f[p_idx];
             new_eta_matrix[i] = (i != p_idx) ? -alpha_q[i] / alpha_q[p_idx] : 1 / alpha_q[p_idx]; 
             beta[i] = (i != p_idx) ? beta[i] - 2 * alpha_q[i] / alpha_q[p_idx] * tau[i]  + pow(alpha_q[i] / alpha_q[p_idx], 2) * beta[p_idx] : beta[i]; 
@@ -355,26 +438,23 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
         beta[p_idx] = beta[p_idx] / pow(alpha_q[p_idx], 2);
         f[p_idx] = f[p_idx] / alpha_q[p_idx];
         
-        basis_indexes[p_idx] =  q;
-        non_basis_indexes[q_idx] = p;
+
+        basis_indexes.update(p_idx, q);
+        non_basis_indexes.update(q_idx, p);
     
-        B.swapColumn(AN, p_idx, q_idx);
-        B_eta_repr.push_back(EtaMatrix(new_eta_matrix, p_idx));
+        pfi_factor.addEtaMatrix(p_idx, new_eta_matrix);
 
         inf_f_indexes.clear();
-        for (size_t i = 0; i < non_basis_size; i++)
+        for (int i = 0; i < non_basis_size; i++)
         {
-            size_t j = non_basis_indexes[i];
+            int j = non_basis_indexes[i];
             if (problem->bound_type[j] == BoundaryType::Free && d[j] < 0)
                 inf_f_indexes.push_back(i);
         }
 
         calcDualInfeasible();
-        if (fabs(theta) < EPS_A) 
-            cycle_num += 1;
-        else
-            cycle_num = 0;
-
+        cycle_num = (fabs(theta) < EPS_A) ? cycle_num + 1 : 0;
+        
         #ifdef DEBUG
         std::cout << iteration << " : Z = "<< obj_func_val << " inf_num = " << counterDualInfeasible() << " p = " << p << " q = " << q << std::endl;  
         #endif
@@ -392,34 +472,96 @@ bool CudaDualSimplex::elaboratedMethod()
 {
     
     // (Step 1) Initialization
-    ValuesVector y(problem->constraints_size);
-    ValuesVector beta(problem->constraints_size);
+    CudaIndexVector     stub_index;
+    CudaIndexVector     stub_val;
 
-    problem->RHS = problem->RHS - AN.dot(x(non_basis_indexes), false);
-    x.setValues(linalg::PFIsolve(B_eta_repr, problem->RHS, false), basis_indexes);
-    y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-    d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
-    obj_func_val = problem->costs.dot(x);
-    beta = initBetaWeights();
-    size_t iteration = 0;
-    size_t cycle_num = 0;
+    CudaDataDenseVector y(basis_size);
+    CudaDataDenseVector rhs(basis_size);
+    CudaDataDenseVector buff_sol(basis_size);
+    CudaDataDenseVector rho(basis_size);
+    CudaDataDenseVector alpha_p(non_basis_size);
+    CudaDataDenseVector tmp_alpha_p(non_basis_size);
+    CudaDataDenseVector alpha_q(basis_size);
+    CudaDataDenseVector tau(basis_size);
+    CudaDataDenseVector column_change(basis_size);
+    CudaDataDenseVector delta_xB(basis_size);
+    CudaDataDenseVector new_eta_matrix(basis_size);
+    CudaDataDenseVector tau(basis_size);
+        
+    IndexVector infeas_idx;
+
+    std::random_device              rd;
+    std::mt19937                    gen(rd());
+    std::uniform_int_distribution<> distrib(0, 1);
+    std::uniform_int_distribution<> non_basis_rand(0, non_basis_size);
+
+    problem->A.dotUpdate(
+        sp_handle, 
+        x, non_basis_indexes, true, 
+        problem->RHS, problem->RHS, 
+        non_basis_indexes, 
+        non_basis_indexes.getSize(), 
+        1, -1, non_basis_indexes, 
+        SpmvOptions::FULL_UPDATE
+    );
+    problem->RHS.updateHostMem();
+
+    solveLinSys(true, problem->RHS, buff_sol);
+    buff_sol.updateHostMem();
+    x.updateByPartialVec(buff_sol, basis_indexes);
+
+    rhs.updateByPartialVec(problem->costs, basis_indexes);
+    rhs.updateDeviceMem();
+    solveLinSys(true, rhs, y);
+
+     problem->A.dotUpdate(
+        sp_handle, 
+        y, stub_index, false, 
+        problem->costs, d, 
+        non_basis_indexes, 
+        non_basis_indexes.getSize(), 
+        1, -1, non_basis_indexes, 
+        SpmvOptions::SET_UPDATE_T
+    );
+    d.updateHostMem();
+
+    x.updateDeviceMem();
+    obj_func_val = problem->costs.dot(cu_handle, x);
+
+    int iteration = 0;
+    int cycle_num = 0;
 
     while (true)
     {
         if (!perturbed && cycle_num > MAX_CYCLE) 
         {
             perturbCosts();
-            y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
-            d.setValues(problem->costs(non_basis_indexes) - AN.dot(y, true), non_basis_indexes);
-            obj_func_val = problem->costs.dot(x);
+            
+            rhs.updateByPartialVec(problem->costs, basis_indexes);
+            rhs.updateDeviceMem();
+            solveLinSys(true, rhs, y);
+
+            problem->A.dotUpdate(
+                sp_handle, 
+                y, stub_index, false, 
+                problem->costs, d, 
+                non_basis_indexes, 
+                non_basis_indexes.getSize(), 
+                1, -1, non_basis_indexes, 
+                SpmvOptions::SET_UPDATE_T
+            );
+            d.updateHostMem();
+
+            x.updateDeviceMem();
+            obj_func_val = problem->costs.dot(cu_handle, x);
         }
         #ifdef DEBUG
         std::cout << iteration << " : Z = "<< obj_func_val << std::endl;
         #endif
         // (Step 2) Pricing
         double delta;
-        size_t p;
-        size_t p_idx;
+        int p;
+        int p_idx;
 
         if (checkPrimalFeasible())
         {
@@ -430,9 +572,9 @@ bool CudaDualSimplex::elaboratedMethod()
         
         bool is_lower = false;
         double max_weight = 0;
-        for (size_t i = 0; i < problem->constraints_size; i++)
+        for (int i = 0; i < basis_size; i++)
         {
-            size_t j = basis_indexes[i];
+            int j = basis_indexes[i];
             double delta_tmp = 0;
             bool is_lower_tmp; 
            
@@ -467,23 +609,31 @@ bool CudaDualSimplex::elaboratedMethod()
         }
         
         // (Step 3) BTran
-        ValuesVector rho(problem->constraints_size);
-        rho = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, p_idx), true);
+        rhs.initUnitVec(p_idx);
+        rhs.updateDeviceMem();
+        solveLinSys(true, rhs, rho);
 
         // (Step 4) Pivot row
-        ValuesVector alpha_p(non_basis_size);
-        alpha_p = AN.dot(rho, true);
+        problem->A.dotUpdate(
+            sp_handle, 
+            rho, stub_index, false, 
+            rho, alpha_p, 
+            non_basis_indexes, 
+            non_basis_indexes.getSize(), 
+            0, 1, non_basis_indexes, 
+            SpmvOptions::FULL_UPDATE_T
+        );
+        alpha_p.updateHostMem();
 
         // (Step 5) Ratio Test
-        ValuesVector tmp_alpha_p(non_basis_size);
         delta = fabs(delta);
         int sgn = (is_lower) ? -1 : 1;
         tmp_alpha_p = (is_lower) ? -alpha_p : alpha_p;
 
         IndexVector F;
-        for (size_t i = 0; i < non_basis_size; i++)
+        for (int i = 0; i < non_basis_size; i++)
         {
-            size_t j = non_basis_indexes[i];
+            int j = non_basis_indexes[i];
             if ((tmp_alpha_p[i] > EPS_ALPHA && fabs(x[j] - problem->lower_bound[j]) < EPS_BOUND  &&
                 (problem->bound_type[j] == BoundaryType::Lower || 
                 problem->bound_type[j] == BoundaryType::Boxed)) ||
@@ -494,19 +644,19 @@ bool CudaDualSimplex::elaboratedMethod()
                 F.push_back(i);
         }
 
-        size_t q_idx, q;
+        int q_idx, q;
         double theta;
         while (F.size() && delta >= 0)
         {
-            size_t it = 0;
+            int it = 0;
             q_idx = F[0];
             q = non_basis_indexes[q_idx];
             theta = (d[q] / tmp_alpha_p[q_idx]);
             for (auto i : F)
             {   
-                size_t j = non_basis_indexes[i];
+                int j = non_basis_indexes[i];
                 double theta_tmp = d[j] / tmp_alpha_p[i];
-                if (theta_tmp < theta || (theta_tmp == theta && minLex(prepareForLex(AN(i), j), prepareForLex(AN(q_idx), q))))
+                if (theta_tmp < theta || (fabs(theta_tmp - theta) < EPS_Z && distrib(gen) == 1))
                 {
                     theta = theta_tmp;
                     q = j;
@@ -534,19 +684,19 @@ bool CudaDualSimplex::elaboratedMethod()
         }
 
         // (Step 6) FTran
-        ValuesVector alpha_q;
-        alpha_q = linalg::PFIsolve(B_eta_repr, AN(q_idx), false);
+        problem->A.getColumn(q_idx, rhs);
+        rhs.updateDeviceMem();
+        solveLinSys(false, rhs, alpha_q);
+        alpha_q.updateHostMem();
 
         // (Step 7) Basis change and update
 
         // Update d accoprding to BRFT
-        ValuesVector column_change(problem->constraints_size);
-        IndexVector infeas_idx;
         double delta_z = 0;
 
-        for (size_t i = 0; i < non_basis_indexes.size(); i++)
+        for (int i = 0; i < non_basis_indexes.getSize(); i++)
         {
-            size_t j = non_basis_indexes[i];
+            int j = non_basis_indexes[i];
             d[j] = d[j] - theta * alpha_p[i];  
             if (problem->bound_type[j] == BoundaryType::Boxed)
             {
@@ -554,13 +704,13 @@ bool CudaDualSimplex::elaboratedMethod()
                 if (x[j] == problem->lower_bound[j] && d[j] < 0)
                 {
                     infeas_idx.push_back(j);
-                    column_change += AN(i) * (problem->upper_bound[j] - problem->lower_bound[j]);
+                    column_change.addSparseCol(problem->A, j, (problem->upper_bound[j] - problem->lower_bound[j])); 
                     delta_z += problem->costs[j] * (problem->upper_bound[j] - problem->lower_bound[j]);
                 }  
                 else if (x[j] == problem->upper_bound[j] && d[j] > 0)
                 {
                     infeas_idx.push_back(j);
-                    column_change -= AN(i) * (problem->upper_bound[j] - problem->lower_bound[j]);
+                    column_change.addSparseCol(problem->A, j, (problem->lower_bound[j] - problem->upper_bound[j])); 
                     delta_z -= problem->costs[j] * (problem->upper_bound[j] - problem->lower_bound[j]);
                 }   
             }          
@@ -568,14 +718,18 @@ bool CudaDualSimplex::elaboratedMethod()
         d[p] = -theta;
         d[q] = 0;
 
-        ValuesVector delta_xB;
         if (!infeas_idx.size())
         {
-            delta_xB = linalg::PFIsolve(B_eta_repr, column_change, false);
-            x.setValues(x(basis_indexes) - delta_xB, basis_indexes);
-            for (size_t i = 0; i < problem->constraints_size; i++)
+            column_change.updateDeviceMem();
+            solveLinSys(false, column_change, delta_xB);
+
+            rhs.updateByPartialVec(x, basis_indexes);
+            rhs.axpyUpdate(cu_handle, delta_xB, -1);
+            x.updateByPartialVec(rhs, basis_indexes);
+
+            for (int i = 0; i < basis_size; i++)
             {
-                size_t j = basis_indexes[i];
+                int j = basis_indexes[i];
                 delta_z -= problem->costs[j] * delta_xB[i];
             }    
         }
@@ -584,12 +738,13 @@ bool CudaDualSimplex::elaboratedMethod()
 
         // Update B and xB, DSE weights
         double theta_P = delta / alpha_q[p_idx];
-        ValuesVector new_eta_matrix(problem->constraints_size);
-        ValuesVector tau(problem->constraints_size);
-        tau = linalg::PFIsolve(B_eta_repr, rho, false);
-        for (size_t i = 0; i < problem->constraints_size; i++)
+        
+        solveLinSys(false, rho, tau);
+        tau.updateHostMem();
+
+        for (int i = 0; i < basis_size; i++)
         {
-            size_t j = basis_indexes[i];
+            int j = basis_indexes[i];
             x[j] = x[j] - theta_P * alpha_q[i];  
             new_eta_matrix[i] = (i != p_idx) ? -alpha_q[i] / alpha_q[p_idx] : 1 / alpha_q[p_idx]; 
             beta[i] = (i != p_idx) ? beta[i] - 2 * alpha_q[i] / alpha_q[p_idx] * tau[i]  + pow(alpha_q[i] / alpha_q[p_idx], 2) * beta[p_idx] : beta[i]; 
@@ -597,11 +752,11 @@ bool CudaDualSimplex::elaboratedMethod()
         beta[p_idx] = beta[p_idx] / pow(alpha_q[p_idx], 2);
         x[q] = x[q] + theta_P;
        
-       // Update basis
-        basis_indexes[p_idx] =  q;
-        non_basis_indexes[q_idx] = p;
-        B.swapColumn(AN, p_idx, q_idx);
-        B_eta_repr.push_back(EtaMatrix(new_eta_matrix, p_idx));
+        // Update basis
+        basis_indexes.update(p_idx, q);
+        non_basis_indexes.update(q_idx, p);
+    
+        pfi_factor.addEtaMatrix(p_idx, new_eta_matrix);
 
         // Flip bounds
         for (auto j : infeas_idx)

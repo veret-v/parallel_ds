@@ -5,12 +5,11 @@
 #include "../src/cpu/sequentialDualSimplex.hpp"
 
 #include "../src/common/problem.hpp"
-#include "../src/common/parser.hpp"
 
 
 TEST(DualSimplexSimple, Test1)
 {
-    size_t m = 3, n =5;
+    int m = 3, n =5;
     ValuesVector costs(std::vector<double>{2, -1, 3, -2, 1});
     ValuesVector lower_range(std::vector<double>{1.5, 2, 0.5}); 
     ValuesVector upper_range(std::vector<double>{1.5, 2, 0.5}); 
@@ -47,7 +46,7 @@ TEST(DualSimplexSimple, Test1)
 
 TEST(DualSimplexSimple, Test2)
 {
-    size_t m = 3, n =5;
+    int m = 3, n =5;
     ValuesVector costs(std::vector<double>{-14, 5, -2, 1, -8});
     ValuesVector lower_range(std::vector<double>{5, 41, 15}); 
     ValuesVector upper_range(std::vector<double>{5, 41, 15}); 
@@ -85,7 +84,7 @@ TEST(DualSimplexSimple, Test2)
 
 TEST(DualSimplexSimple, Test3)
 {
-    size_t m = 2, n = 3;
+    int m = 2, n = 3;
     ValuesVector costs(std::vector<double>{3, 2, 3});
     ValuesVector lower_range(std::vector<double>{0, 8}); 
     ValuesVector upper_range(std::vector<double>{2, 0}); 
@@ -118,7 +117,7 @@ TEST(DualSimplexSimple, Test3)
 
 TEST(DualSimplexSimple, Test4)
 {
-    size_t m = 3, n = 5;
+    int m = 3, n = 5;
     ValuesVector costs(std::vector<double>{-2, -3, 0, 0, 0});
     ValuesVector lower_range(std::vector<double>{5, 9, 4}); 
     ValuesVector upper_range(std::vector<double>{5, 9, 4}); 

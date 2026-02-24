@@ -18,11 +18,9 @@
 
 namespace linalg
 {
-    ValuesVector unit(const size_t size, const size_t p);
+    ValuesVector unit(const int size, const int p);
 
     ValuesVector PFIsolve(const std::vector<EtaMatrix>& A, const ValuesVector& b, const bool transpose);
     bool PFIdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed);
-    ValuesVector LUsolve(const std::vector<EtaMatrix>& A, const ValuesVector& b, const bool transpose);
-    bool LUdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed);
 } // namespace linalg
 

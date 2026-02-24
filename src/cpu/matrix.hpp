@@ -9,43 +9,59 @@
 #include "../common/types.hpp"
 
 
+#define GET_ID(vec, id) (vec.size() ? vec[id] : id)
+    
+
 class Matrix
 {
 protected:
-    size_t m;
-    size_t n;
+    int m;
+    int n;
    
     std::vector<double> elem_csc;
-    std::vector<size_t> col_ptr;
-    std::vector<size_t> row_id;
+    std::vector<int> col_ptr;
+    std::vector<int> row_id;
 
     std::vector<double> elem_csr;
-    std::vector<size_t> row_ptr;
-    std::vector<size_t> col_id;
+    std::vector<int> row_ptr;
+    std::vector<int> col_id;
+
+    void copyCoinPackedMatrix(CoinPackedMatrix& matrix);
 
 public:
-    Matrix(const size_t m, const size_t n);
+    Matrix(const int m, const int n);
     Matrix(CoinPackedMatrix& matrix);
     Matrix() : Matrix(0, 0) {};
-   
-    double operator()(const size_t i, const size_t j) const;
-    double& operator()(const size_t i, const size_t j);
 
-    ValuesVector operator()(const size_t p) const;
+    double operator()(const int i, const int j) const;
+    double& operator()(const int i, const int j);
+
+    ValuesVector operator()(const int p) const;
     Matrix operator()(const IndexVector& indexes) const;
+    
     Matrix& operator=(const Matrix& Matrix);
+    Matrix& operator=(CoinPackedMatrix& matrix);
 
     inline MatrixSize getSize() const {return std::make_tuple(m, n);};
     inline std::vector<double> getElem() const {return elem_csc;};
-    inline std::vector<size_t> getColPtrs() const {return row_ptr;};
-    inline std::vector<size_t> getRowIds() const {return col_id;};
+    inline std::vector<int> getColPtrs() const {return row_ptr;};
+    inline std::vector<int> getRowIds() const {return col_id;};
 
     void stackColUnitMatrix();
     void dotEtaMatrix(const EtaMatrix& etaMatrix);
-    ValuesVector dot(const ValuesVector& Vector, bool transpose);
+    // sol = alpha*A(T)*vec1 + beta*vec2
+    // sol = alpha*A(T)*vec1 + beta*sol
+    void dotUpdate(
+        const ValuesVector& vec1, 
+        const IndexVector& vec1_idx,
+        const ValuesVector& vec2, 
+        ValuesVector& sol, 
+        const double alpha, 
+        const double beta,
+        const IndexVector& set_idx,
+        const SpmvOptions& method
+    );
 
-    void swapColumn(Matrix& A, const size_t b_idx, const size_t a_idx);
-    void swapRows(const size_t row1, const size_t row2);
     void genCSRorder();
     void show() const;
 };

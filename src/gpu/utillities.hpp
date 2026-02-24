@@ -28,6 +28,15 @@
     } while(0);
 
 
+#define CUBLAS_CALL_AND_CHECK(call, msg) \
+    do { \
+        cublasStatus_t status = call; \ 
+        if (status != CUBLAS_STATUS_SUCCESS) { \
+            printf("FAILED: CUBLAS call ended unsuccessfully with status = %d, details: " #msg "\n", status); \
+        } \
+    } while(0);
+
+
 #define CUDSS_CALL_AND_CHECK(call, msg) \
     do { \
         cudssStatus_t status = call; \ 
@@ -37,8 +46,12 @@
     } while(0);
 
 
-cudaStream_t getStreamFromHandle(cublasHandle_t handle); 
-cublasPointerMode_t getPointerMode(cublasHandle_t handle);
+cudaStream_t utilCublasGetStreamFromHandle(cublasHandle_t handle); 
+cublasPointerMode_t utilCublasGetPointerMode(cublasHandle_t handle);
+cudaStream_t utilCusparseGetStreamFromHandle(cusparseHandle_t handle); 
+cusparsePointerMode_t utilCusparseGetPointerMode(cusparseHandle_t handle);
+
+
 cublasStatus_t betaWeightsUpdateLauncher(
     cublasHandle_t handle,
     int n,
@@ -51,12 +64,49 @@ cublasStatus_t betaWeightsUpdateLauncher(
     int pivot_idx
 );
 
-void replaceColumnCSC(
+
+cublasStatus_t btranOrFtran(
+    cublasHandle_t handle,
+    double *y,
+    const double *x,
+    const double *device_values,
+    const int *device_col_id,
+    const int size,
+    const int col_len,
+    const bool transpose
+);
+
+
+cusparseStatus_t spmvUpdateInc(
     cusparseHandle_t handle,
-    const cusparseSpMatDescr_t matA,  
-    int col_idx,
-    const double* d_new_col_values, 
-    const int* d_new_col_row_ind, int new_col_nnz,
-    cusparseSpMatDescr_t* matB,      
-    cudaDataType dataType 
+    const bool sparse_x,
+    int nnz,
+    int major_dim,
+    double* y,    
+    const double* x,  
+    const int* x_idx, 
+    const double* val, 
+    const int* id, 
+    const int* ptr,
+    const int* need_ptrs,
+    const double alpha,
+    const double beta
+); 
+
+
+cusparseStatus_t spmvUpdateSet(
+    cusparseHandle_t handle,
+    int nnz,
+    int major_dim,
+    double* y, 
+    const int* set_id,  
+    const int set_id_size,  
+    const double* x,  
+    const double* z, 
+    const double* val, 
+    const int* id, 
+    const int* ptr,
+    const int* need_ptrs,
+    const double alpha,
+    const double beta
 ); 

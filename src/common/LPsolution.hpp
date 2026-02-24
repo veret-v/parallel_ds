@@ -27,8 +27,8 @@ public:
     bool solved;
     ValuesVector x;
     std::string message;
-    size_t phase2_time;
-    size_t iterations;
+    int phase2_time;
+    int iterations;
 
     LPsolution(
         const double _Z, 

@@ -12,8 +12,10 @@
 #include <queue>
 #include <algorithm>
 
-#include "cudaDenseVector.hpp"
+#include "cudaDataDenseVector.hpp"
+#include "cudaIndexVector.hpp"
 #include "cudaSparseMatrix.hpp"
+#include "PFIfactor.hpp"
 
 #include "../common/problem.hpp"
 #include "../common/types.hpp"
@@ -34,26 +36,27 @@
 #define REFACT_FREQ   200
 
 
-class CudaDualSimplex : public BaseDualSimplex
+class CudaDualSimplex : public BaseDualSimplex<CudaSparseMatrix, CudaDataDenseVector, CudaIndexVector>
 {
 protected:
-    CudaSparseMatrix device_AN;
-    CudaSparseMatrix device_B;
+    PFIfactor pfi_factor;
 
-    CudaDenseVector device_xB;
-    CudaDenseVector device_xN;
-
-    CudaDenseVector device_dB;
-    CudaDenseVector device_dN;
-
-    CudaDenseVector device_beta;
+    CudaDataDenseVector beta;
     
     cublasHandle_t cu_handle;
-    cusolverSpHandle_t sl_handle;
     cusparseHandle_t sp_handle;
-    cusolverRfHandle_t rf_handle;
+
+    cudssHandle_t cudss_handle;
+    cudssConfig_t cudss_config;
+    cudssData_t cudss_data;
+
+    cudssHandle_t cudss_handle_T;
+    cudssConfig_t cudss_config_T;
+    cudssData_t cudss_data_T;
 
     void initDualSimplex() override;
+
+    void solveLinSys(const bool transpose, const CudaDataDenseVector& rhs, CudaDataDenseVector& sol);
 
     Phase1OutStatus callPresolver(const PresolverMethods method) override;
     bool callDualSolver(const SolverMethods method) override;

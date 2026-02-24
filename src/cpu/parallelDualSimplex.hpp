@@ -38,7 +38,7 @@
 #define REFACT_FREQ   200
 
 
-class ParallelDualSimplex : public BaseDualSimplex
+class ParallelDualSimplex : public BaseDualSimplex<Matrix, ValuesVector, IndexVector>
 {
 protected:
     std::vector<EtaMatrix> B_eta_repr;

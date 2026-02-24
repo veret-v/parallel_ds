@@ -6,8 +6,16 @@ if(WITH_CUDA)
         ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaSparseMatrix.cu
         ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaDenseVector.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaDenseVector.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaIndexVector.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaIndexVector.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaDataDenseVector.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaDataDenseVector.cu
         ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaKernels.cu
         ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaKernels.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/PFIfactor.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/PFIfactor.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/utillities.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/gpu/utillities.hpp
     )
     
     set_source_files_properties(
@@ -24,8 +32,6 @@ if(WITH_CUDA)
 endif()
 
 target_sources(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/common/parser.hpp 
-    ${CMAKE_CURRENT_SOURCE_DIR}/common/parser.cpp 
     ${CMAKE_CURRENT_SOURCE_DIR}/cpu/sequentialDualSimplex.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cpu/sequentialDualSimplex.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cpu/parallelDualSimplex.hpp
@@ -45,8 +51,6 @@ target_sources(${PROJECT_NAME} PRIVATE
 )
 
 add_library(app_test STATIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/common/parser.hpp 
-    ${CMAKE_CURRENT_SOURCE_DIR}/common/parser.cpp 
     ${CMAKE_CURRENT_SOURCE_DIR}/cpu/sequentialDualSimplex.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cpu/sequentialDualSimplex.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/common/baseDualSimplex.hpp

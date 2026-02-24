@@ -10,7 +10,7 @@
 #include <CoinMpsIO.hpp>
 
 
-typedef std::vector<size_t> IndexVector;
+typedef std::vector<int> IndexVector;
 
 class Matrix;
 
@@ -23,7 +23,7 @@ protected:
     std::vector<double> data;
  
 public:
-    ValuesVector(const size_t size);
+    ValuesVector(const int size);
     ValuesVector(const std::vector<double> vector);
     ValuesVector(const ValuesVector& values_vector);
     ValuesVector(const CoinPackedVector& values_vector);
@@ -37,22 +37,22 @@ public:
     ValuesVector operator+(const ValuesVector& values_vector) const;
     ValuesVector operator*(const double& value) const;
     ValuesVector operator()(const IndexVector& indexes) const;
-    ValuesVector operator()(const size_t start, const size_t stop) const;
+    ValuesVector operator()(const int start, const int stop) const;
     
    
     typedef std::vector<double>::iterator iterator;
     typedef std::vector<double>::const_iterator const_iterator;
 
-    double operator[](const size_t idx) const {return data[idx];};
-    double& operator[](const size_t idx) {return data[idx];};
+    double operator[](const int idx) const {return data[idx];};
+    double& operator[](const int idx) {return data[idx];};
 
-    size_t getSize() const {return data.size();};
-    size_t getSize() {return data.size();};
+    int getSize() const {return data.size();};
+    int getSize() {return data.size();};
 
     const std::vector<double>& getData() {return data;};
 
     
-    size_t countNonZero() const;
+    int countNonZero() const;
 
     double dot(const ValuesVector &values_vector) const;
     double mean() const;

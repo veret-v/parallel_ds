@@ -1,7 +1,7 @@
 #include "linalg.hpp"
 
 
-ValuesVector linalg::unit(const size_t size, const size_t p)
+ValuesVector linalg::unit(const int size, const int p)
 {
     ValuesVector new_vec(size);
     new_vec[p] = 1;
@@ -18,10 +18,10 @@ ValuesVector linalg::PFIsolve(const std::vector<EtaMatrix>& A, const ValuesVecto
         auto end = A.end();
         for(start; start != end; start += 1)
         {
-            size_t k = std::get<1>(*start);
+            int k = std::get<1>(*start);
             ValuesVector eta_val =  std::get<0>(*start);
             ValuesVector buff_result(result);
-            for (size_t i = 0; i < b.getSize(); i++)
+            for (int i = 0; i < b.getSize(); i++)
                 buff_result[i] = (i != k) ? result[i] + result[k] * eta_val[i] : result[k] * eta_val[k];    
             result = buff_result;        
         }
@@ -31,7 +31,7 @@ ValuesVector linalg::PFIsolve(const std::vector<EtaMatrix>& A, const ValuesVecto
         auto end = A.rend();
         for(start; start != end; start += 1)
         {
-            size_t k = std::get<1>(*start);
+            int k = std::get<1>(*start);
             ValuesVector eta_val = std::get<0>(*start);
             result[k] = eta_val.dot(result);  
         }
@@ -45,16 +45,16 @@ bool linalg::PFIdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed)
 {
     Matrix buff_A(A);
     buff_A.genCSRorder();
-    size_t m = std::get<0>(buff_A.getSize());
+    int m = std::get<0>(buff_A.getSize());
     bool is_identity;
 
-    for (size_t i = 0; i < m; i++)
+    for (int i = 0; i < m; i++)
     {
         is_identity = true;
         if (fabs(buff_A(i, i)) < EPS_ZERO)
         {
-            size_t swap_id  = i;
-            for (size_t k = i; k < m; k++)
+            int swap_id  = i;
+            for (int k = i; k < m; k++)
             {
 
                 if (fabs(buff_A(k, i)) > EPS_SWAP) 
@@ -85,7 +85,7 @@ bool linalg::PFIdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed)
         }
        
         ValuesVector eta_matrix_val(m);
-        for (size_t j = 0; j < m; j++)
+        for (int j = 0; j < m; j++)
             eta_matrix_val[j] = (j != i) ? - buff_A(j, i) / buff_A(i, i) : 1 / buff_A(i, i); 
         EtaMatrix eta = EtaMatrix(eta_matrix_val, i);
         
@@ -104,25 +104,25 @@ bool linalg::PFIdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed)
 
 // bool linalg::LUdecompose(const Matrix& A, std::vector<EtaMatrix>& decomposed)
 // {
-//     size_t m = std::get<0>(A.getSize());
+//     int m = std::get<0>(A.getSize());
 //     Matrix U = A;
 //     Matrix per_rows(m, m);
 //     Matrix per_cols(m, m);
 //     std::vector<EtaMatrix> L;
-//     std::unordered_set<size_t> P;
-//     std::unordered_set<size_t> Q;
+//     std::unordered_set<int> P;
+//     std::unordered_set<int> Q;
 
-//     for (size_t i = 0; i < m; i++)
+//     for (int i = 0; i < m; i++)
 //     {
 //         P.insert(i);
 //         Q.insert(i);
 //     }
 
-//     for (size_t k = 0; k < m; k++)
+//     for (int k = 0; k < m; k++)
 //     {
-//         size_t p, q;
-//         for (size_t p : P)
-//             for (size_t q : Q)
+//         int p, q;
+//         for (int p : P)
+//             for (int q : Q)
 //                 if (U(p, q) != 0) break;
         
 //         per_rows(p, k) = 1;
