@@ -22,19 +22,6 @@
 #include "../common/LPsolution.hpp"
 #include "../common/baseDualSimplex.hpp"
 
-#define EPS_BOUND 1e-10
-#define EPS_ALPHA 1e-8
-#define EPS_D     1e-7
-#define EPS_COSTS 1e-8
-#define EPS_A     1e-5
-#define EPS_Z     1e-12
-#define REFACT_ERR 1e-9
-
-#define PERTURB_RATIO 0.25
-#define PSI           1e-5
-#define MAX_CYCLE     5
-#define REFACT_FREQ   200
-
 
 class CudaDualSimplex : public BaseDualSimplex<CudaSparseMatrix, CudaDataDenseVector, CudaIndexVector>
 {
@@ -42,19 +29,19 @@ protected:
     PFIfactor pfi_factor;
 
     CudaDataDenseVector beta;
+
+    cudaStream_t stream     = NULL;
     
-    cublasHandle_t cu_handle;
-    cusparseHandle_t sp_handle;
+    cublasHandle_t cu_handle   = NULL;
+    cusparseHandle_t sp_handle = NULL;
 
-    cudssHandle_t cudss_handle;
-    cudssConfig_t cudss_config;
-    cudssData_t cudss_data;
+    cudssHandle_t cudss_handle = NULL;
+    cudssConfig_t cudss_config = NULL;
+    cudssData_t cudss_data     = NULL;
 
-    cudssHandle_t cudss_handle_T;
-    cudssConfig_t cudss_config_T;
-    cudssData_t cudss_data_T;
-
-    void initDualSimplex() override;
+    cudssHandle_t cudss_handle_T = NULL;
+    cudssConfig_t cudss_config_T = NULL;
+    cudssData_t cudss_data_T     = NULL;
 
     void solveLinSys(const bool transpose, const CudaDataDenseVector& rhs, CudaDataDenseVector& sol);
 
@@ -72,8 +59,14 @@ protected:
     void initBetaWeights();
 
 public:
+    CudaDualSimplex(Problem<CudaSparseMatrix, CudaDataDenseVector>& _problem) : 
+        BaseDualSimplex<CudaSparseMatrix, CudaDataDenseVector, CudaIndexVector>(_problem),
+        pfi_factor(_problem.constraints_size, REFACT_FREQ + 1)
+    {};
     using BaseDualSimplex::BaseDualSimplex;
+    ~CudaDualSimplex();
 
+    void initDualSimplex();
 };
 
 

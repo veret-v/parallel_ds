@@ -1,11 +1,13 @@
-#!/bin/bash
+# !/bin/bash
 SOURCE_DIR="$(pwd)"
 BUILD_DIR="${SOURCE_DIR}/build"
 
-if [ -d "${BUILD_DIR}" ]; then
-    echo "Удаление существующей директории сборки..."
-    rm -rf "${BUILD_DIR}"
-fi
+export MKLROOT=/opt/intel/compilers_and_libraries_2018.2.199/linux/mkl
+
+# if [ -d "${BUILD_DIR}" ]; then
+#     echo "Удаление существующей директории сборки..."
+#     rm -rf "${BUILD_DIR}"
+# fi
 
 echo "Создание директории сборки..."
 mkdir -p "$BUILD_DIR" ||  { echo "Ошибка создания каталога"; exit 1; }
@@ -18,4 +20,16 @@ echo "Сборка проекта..."
 make || { echo "Ошибка сборки"; exit 1; }
 
 echo "Сборка успешно завершена."
+
+# touch res.txt
+# for file in ../tests/test_data/*
+# do
+#     timeout 600s ./solver $file >> res.txt
+# done
+
+
+./solver ../tests/test_data/adlittle.mps
+# ./solver ../tests/test_data/bandm.mps
+# ./solver ../tests/test_data/boeing1.mps
+
 exit 0

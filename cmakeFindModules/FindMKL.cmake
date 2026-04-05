@@ -78,14 +78,13 @@
 
 
 set(FINDMKL_DEBUG_MODE 1)
+set(MKL_USE_interface "lp64")
 
 # unset this variable defined in matio
 unset(MSVC)
 
 # Find MKL ROOT
-message(STATUS "MKLROOT from env: $ENV{MKLROOT}")
 find_path(MKL_ROOT_DIR NAMES include/mkl.h PATHS $ENV{MKLROOT})
-message(STATUS "MKL_ROOT_DIR after find_path: ${MKL_ROOT_DIR}")
 
 # Convert symlinks to real paths
 

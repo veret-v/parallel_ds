@@ -1,11 +1,29 @@
 #include "cudaDualSimplex.hpp"
 
 
+CudaDualSimplex::~CudaDualSimplex()
+{
+    cusparseDestroy(sp_handle);
+    cublasDestroy(cu_handle);
+
+    cudssDataDestroy(cudss_handle, cudss_data);
+    cudssConfigDestroy(cudss_config);
+    cudssDestroy(cudss_handle);
+
+    cudssDataDestroy(cudss_handle_T, cudss_data_T);
+    cudssConfigDestroy(cudss_config_T);
+    cudssDestroy(cudss_handle_T);
+
+    cudaStreamSynchronize(stream);
+}
+
 //----------------------------------------------------------------------------------------
 // Init params, setting data according to index arrays
 //----------------------------------------------------------------------------------------
 void CudaDualSimplex::initDualSimplex()
 {
+    std::cout << "Solver initialization : basis columns selected" << std::endl;
+
     x = ValuesVector(problem->problem_size);
     d = ValuesVector(problem->problem_size);   
 
@@ -13,22 +31,54 @@ void CudaDualSimplex::initDualSimplex()
     // качсетве базиса берутся basis_size последних колонок матрицы A, 
     // а они в свою очередь созданы добавление slack-variables
     B.initI(basis_size); 
+    cudaStreamCreate(&stream);
 
     cusparseCreate(&sp_handle);
     cublasCreate(&cu_handle);
+    cusparseSetStream(sp_handle, stream);
+    cublasSetStream(cu_handle, stream);
 
+    cudssAlgType_t reorder_alg = CUDSS_ALG_DEFAULT;    
+    cudssAlgType_t matching_alg = CUDSS_ALG_DEFAULT; // matching with scaling, same as CUDSS_ALG_5
+    int ione = 1;
+
+    /*initalization backend for A LU factorization*/
     cudssCreate(&cudss_handle);
+    cudssSetStream(cudss_handle, stream);
     cudssDataCreate(cudss_handle, &cudss_data);
     cudssConfigCreate(&cudss_config);
 
+    cudssConfigSet(cudss_config, CUDSS_CONFIG_REORDERING_ALG,
+                         &reorder_alg, sizeof(cudssAlgType_t));
+    cudssConfigSet(cudss_config, CUDSS_CONFIG_USE_MATCHING,
+                         &ione, sizeof(int));
+    cudssConfigSet(cudss_config, CUDSS_CONFIG_MATCHING_ALG,
+                         &matching_alg, sizeof(cudssAlgType_t));
+
+    /*initalization backend for AT LU factorization*/
     cudssCreate(&cudss_handle_T);
+    cudssSetStream(cudss_handle_T, stream);
     cudssDataCreate(cudss_handle_T, &cudss_data_T);
     cudssConfigCreate(&cudss_config_T);
 
+    cudssConfigSet(cudss_config_T, CUDSS_CONFIG_REORDERING_ALG,
+                         &reorder_alg, sizeof(cudssAlgType_t));
+    cudssConfigSet(cudss_config_T, CUDSS_CONFIG_USE_MATCHING,
+                         &ione, sizeof(int));
+    cudssConfigSet(cudss_config_T, CUDSS_CONFIG_MATCHING_ALG,
+                         &matching_alg, sizeof(cudssAlgType_t));
+
+           
+    problem->A.genCsc(sp_handle);
+
+    B.createDescr();
     B.LUdecompose(
         cudss_handle, cudss_config, cudss_data,
-        cudss_handle, cudss_config, cudss_data
+        cudss_handle_T, cudss_config_T, cudss_data_T,
+        sp_handle
     );
+
+    std::cout << "Solver initialization : attributes setted" << std::endl; 
 }
 
 //----------------------------------------------------------------------------------------
@@ -72,7 +122,7 @@ SolverMethods CudaDualSimplex::stringToSolverMethod(
 //----------------------------------------------------------------------------------------
 // Choose presolver 
 //----------------------------------------------------------------------------------------
-CudaDualSimplex::Phase1OutStatus CudaDualSimplex::callPresolver(const PresolverMethods method)
+Phase1OutStatus CudaDualSimplex::callPresolver(const PresolverMethods method)
 {
     Phase1OutStatus status;
     switch (method) 
@@ -171,7 +221,7 @@ void CudaDualSimplex::solveLinSys(
 // Numerical experiments. Mathematical Methods of Operations Research, 55:413–
 // 429, 2002.
 //----------------------------------------------------------------------------------------
-CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
+Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
 {
     // (Step 1) Initialization
     Phase1OutStatus     status;
@@ -195,22 +245,23 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
     IndexVector         inf_u_indexes;
     IndexVector         inf_l_indexes;
     IndexVector         inf_f_indexes;
-
+    std::cout << "111" << std::endl;
     rhs.updateByPartialVec(problem->costs, basis_indexes);
     rhs.updateDeviceMem();
     solveLinSys(true, rhs, y);
-
+std::cout << "111" << std::endl;
     problem->A.dotUpdate(
-        sp_handle, 
-        y, stub_index, false, 
-        problem->costs, d, 
+        sp_handle,
+        y, problem->costs, 
+        d, -1, 1, 
         non_basis_indexes, 
-        non_basis_indexes.getSize(), 
-        1, -1, non_basis_indexes, 
-        SpmvOptions::SET_UPDATE_T
+        SpmvOptions::UPDATE_T,
+        true
     );
+    std::cout << "111" << std::endl;
+
     d.updateHostMem();
-    
+    std::cout << "111" << std::endl;
     for (int i = 0; i < non_basis_size; i++)
     {
         int j = non_basis_indexes[i];
@@ -230,13 +281,13 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
     for (auto i : inf_l_indexes)
     {
         obj_func_val += d[i];
-        columns_change.addSparseCol(problem->A, i, 1);
+        problem->A.addSparseCol(columns_change, i, 1);
     }
 
     for (auto i : inf_u_indexes)
     {
         obj_func_val += d[i];
-        columns_change.addSparseCol(problem->A, i, -1);
+        problem->A.addSparseCol(columns_change, i, -1);
     }
 
     columns_change.updateDeviceMem();
@@ -244,7 +295,7 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
     f.updateHostMem();
 
     initBetaWeights();
-    
+    std::cout << "111" << std::endl;
     int iteration = 0;
     int cycle_num = 0;
 
@@ -265,14 +316,13 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
             rhs.updateDeviceMem();
             solveLinSys(true, rhs, y);
 
-            problem->A.dotUpdate(
-                sp_handle, 
-                y, stub_index, false, 
-                problem->costs, d, 
+             problem->A.dotUpdate(
+                sp_handle,
+                y, problem->costs, 
+                d, -1, 1, 
                 non_basis_indexes, 
-                non_basis_indexes.getSize(), 
-                1, -1, non_basis_indexes, 
-                SpmvOptions::SET_UPDATE_T
+                SpmvOptions::UPDATE_T,
+                true
             );
             d.updateHostMem();
         }
@@ -315,8 +365,8 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
             }
             else if (obj_func_val > 0)
             {
-                solution.solved = false;
-                solution.message = "dual infeasible";
+                problem->solution.solved = false;
+                problem->solution.message = "dual infeasible";
                 status = Phase1OutStatus::DualInfeas;
             }
             break;
@@ -329,13 +379,12 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
         
         // (Step 4) Pivot row
         problem->A.dotUpdate(
-            sp_handle, 
-            rho, stub_index, false, 
-            rho, alpha, 
+            sp_handle,
+            rho, problem->costs, 
+            alpha, 1, 0, 
             non_basis_indexes, 
-            non_basis_indexes.getSize(), 
-            0, 1, non_basis_indexes, 
-            SpmvOptions::FULL_UPDATE_T
+            SpmvOptions::UPDATE_T,
+            false
         );
         alpha.updateHostMem();
        
@@ -410,7 +459,8 @@ CudaDualSimplex::Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
             pfi_factor.resetPFI();
             B.LUdecompose(
                 cudss_handle, cudss_config, cudss_data,
-                cudss_handle, cudss_config, cudss_data
+                cudss_handle, cudss_config, cudss_data,
+                sp_handle
             );
         }
 
@@ -486,7 +536,6 @@ bool CudaDualSimplex::elaboratedMethod()
     CudaDataDenseVector column_change(basis_size);
     CudaDataDenseVector delta_xB(basis_size);
     CudaDataDenseVector new_eta_matrix(basis_size);
-    CudaDataDenseVector tau(basis_size);
         
     IndexVector infeas_idx;
 
@@ -495,14 +544,13 @@ bool CudaDualSimplex::elaboratedMethod()
     std::uniform_int_distribution<> distrib(0, 1);
     std::uniform_int_distribution<> non_basis_rand(0, non_basis_size);
 
-    problem->A.dotUpdate(
-        sp_handle, 
-        x, non_basis_indexes, true, 
-        problem->RHS, problem->RHS, 
+     problem->A.dotUpdate(
+        sp_handle,
+        x, problem->RHS, 
+        problem->RHS, -1, 1, 
         non_basis_indexes, 
-        non_basis_indexes.getSize(), 
-        1, -1, non_basis_indexes, 
-        SpmvOptions::FULL_UPDATE
+        SpmvOptions::UPDATE,
+        true
     );
     problem->RHS.updateHostMem();
 
@@ -515,13 +563,12 @@ bool CudaDualSimplex::elaboratedMethod()
     solveLinSys(true, rhs, y);
 
      problem->A.dotUpdate(
-        sp_handle, 
-        y, stub_index, false, 
-        problem->costs, d, 
+        sp_handle,
+        y, problem->costs, 
+        d, -1, 1, 
         non_basis_indexes, 
-        non_basis_indexes.getSize(), 
-        1, -1, non_basis_indexes, 
-        SpmvOptions::SET_UPDATE_T
+        SpmvOptions::UPDATE_T,
+        true
     );
     d.updateHostMem();
 
@@ -542,13 +589,12 @@ bool CudaDualSimplex::elaboratedMethod()
             solveLinSys(true, rhs, y);
 
             problem->A.dotUpdate(
-                sp_handle, 
-                y, stub_index, false, 
-                problem->costs, d, 
+                sp_handle,
+                y, problem->costs, 
+                d, -1, 1, 
                 non_basis_indexes, 
-                non_basis_indexes.getSize(), 
-                1, -1, non_basis_indexes, 
-                SpmvOptions::SET_UPDATE_T
+                SpmvOptions::UPDATE_T,
+                true
             );
             d.updateHostMem();
 
@@ -565,8 +611,8 @@ bool CudaDualSimplex::elaboratedMethod()
 
         if (checkPrimalFeasible())
         {
-            solution.solved = true;
-            solution.message = "optimal solution";
+            problem->solution.solved = true;
+            problem->solution.message = "optimal solution";
             break;
         }
         
@@ -615,13 +661,12 @@ bool CudaDualSimplex::elaboratedMethod()
 
         // (Step 4) Pivot row
         problem->A.dotUpdate(
-            sp_handle, 
-            rho, stub_index, false, 
-            rho, alpha_p, 
+            sp_handle,
+            rho, problem->costs, 
+            alpha_p, 1, 0, 
             non_basis_indexes, 
-            non_basis_indexes.getSize(), 
-            0, 1, non_basis_indexes, 
-            SpmvOptions::FULL_UPDATE_T
+            SpmvOptions::UPDATE_T,
+            false
         );
         alpha_p.updateHostMem();
 
@@ -678,8 +723,8 @@ bool CudaDualSimplex::elaboratedMethod()
 
         if (!F.size())
         {
-            solution.solved = false;
-            solution.message = "dual unbounded";
+            problem->solution.solved = false;
+            problem->solution.message = "dual unbounded";
             break;
         }
 
@@ -704,13 +749,13 @@ bool CudaDualSimplex::elaboratedMethod()
                 if (x[j] == problem->lower_bound[j] && d[j] < 0)
                 {
                     infeas_idx.push_back(j);
-                    column_change.addSparseCol(problem->A, j, (problem->upper_bound[j] - problem->lower_bound[j])); 
+                    problem->A.addSparseCol(column_change, j, (problem->upper_bound[j] - problem->lower_bound[j])); 
                     delta_z += problem->costs[j] * (problem->upper_bound[j] - problem->lower_bound[j]);
                 }  
                 else if (x[j] == problem->upper_bound[j] && d[j] > 0)
                 {
                     infeas_idx.push_back(j);
-                    column_change.addSparseCol(problem->A, j, (problem->lower_bound[j] - problem->upper_bound[j])); 
+                    problem->A.addSparseCol(column_change, j, (problem->lower_bound[j] - problem->upper_bound[j])); 
                     delta_z -= problem->costs[j] * (problem->upper_bound[j] - problem->lower_bound[j]);
                 }   
             }          
@@ -772,6 +817,6 @@ bool CudaDualSimplex::elaboratedMethod()
         if (fabs(theta) < EPS_A) cycle_num += 1;
     }
     std::cout << "iterations = " << iteration << std::endl;
-    return solution.solved;
+    return problem->solution.solved;
 }
 

@@ -2,6 +2,7 @@
 
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
+#include <cstdio> 
 
 #define WARP_SIZE 32
 
@@ -32,48 +33,20 @@ __global__ void betaWeightsUpdateKernelOpt(
 
 
 __global__ void spmvUpdateKernel(    
-    double *y,
-    const double *x,
-    const double *val_csr,
-    const int *id_csr,
-    const int *ptr_csr,
-    const int* need_ptrs,
-    const int nnz,
-    const int major_dim,
-    const double alpha,
-    const double beta
-);
-
-
-__global__ void spmvUpdateSpKernel(    
-    double* y,
-    const double* x,
-    const int* x_idx, 
+    double* sol,
+    const double* vec1,
+    const double* vec2,
     const double* val_csr,
     const int* id_csr,
     const int* ptr_csr,
-    const int* need_ptrs,
+    const int* cols_idx,
+    double* buff,
+    const int cols_idx_size,
     const int nnz,
     const int major_dim,
     const double alpha,
-    const double beta
-);
-
-
-__global__ void spmvUpdateSetKernel(    
-    double *y,
-    const int *set_id,
-    const int set_id_size,
-    const double *x,
-    const double *z,
-    const double *val_csr,
-    const int *id_csr,
-    const int *ptr_csr,
-    const int* need_ptrs,
-    const int nnz,
-    const int major_dim,
-    const double alpha,
-    const double beta
+    const double beta,
+    const bool set
 );
 
 

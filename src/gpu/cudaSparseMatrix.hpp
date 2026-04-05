@@ -6,14 +6,12 @@
 
 #include <CoinMpsIO.hpp>
 #include <cuda_runtime.h>
-#include <cublas.h>
+#include <cublas_v2.h>
 #include <cusparse.h>
-#include <cublas_api.h>
 #include <cusparse_v2.h>
 #include <cusolverDn.h>
 #include <cusolverRf.h>
 #include <cusolverSp.h>
-#include <cusolverSp_LOWLEVEL_PREVIEW.h>
 #include <math.h>
 #include <cudss.h>
 
@@ -21,12 +19,12 @@
 #include "cudaDataDenseVector.hpp"
 #include "cudaIndexVector.hpp"
 
-
 #include "../common/types.hpp"
 
+#include "../cpu/matrix.hpp"
+
+
 #define SING_EPS 1e-12
-
-
 
 //----------------------------------------------------------------------------------------
 // Sparse matrix class, store csr an csc representation simultaniously for CUDSS solver.
@@ -40,7 +38,9 @@ private:
     int major_dim = 0;
     int non_zero  = 0;
 
-    bool CSR_exist = false;
+    bool CSС_exist   = false;
+    bool memory_init = false;
+    bool descr_exist = false;
 
     double* device_values_csc = nullptr;
     int* device_ptr_csc       = nullptr;
@@ -54,28 +54,54 @@ private:
     cudssMatrix_t        mat_cudss_descr;   // дескриптор не транспонированной матрицы для решений Ax = b
     cudssMatrix_t        mat_cudss_descr_T; // дескриптор транспонированной матрицы для решений A^Tx = b(из-за структуры CUDSS)
 
-    void allocateMemory(int non_zero_size, int col_starts);
+    void allocateMemory(int non_zero_size, int m, int n);
     void copy(
         double* device_values, int* device_ptr, int* device_id, 
         const double* values_new, const int* ptr_new, const int* id_new,
         cudaMemcpyKind copy_type
     );
     void freeMemory();
+    void destroyDesr();
 
-    void createDescr();
-    void genCsr(cusparseHandle_t& handle);
+    void copyCsrToHost(
+        std::vector<double>& elem_csr,
+        std::vector<int>& row_ptr,
+        std::vector<int>& col_id
+    );
+    void updateDataByHost(
+        cusparseHandle_t& handle, 
+        const std::vector<double>& elem_csr,
+        const std::vector<int>& row_ptr,
+        const std::vector<int>& col_id
+    );
     
 public:
     CudaSparseMatrix(const int m, const int n);
-    CudaSparseMatrix(const Matrix& matrix, cusparseHandle_t& cusp_handle);
+    CudaSparseMatrix(const CoinPackedMatrix& matrix);
     CudaSparseMatrix(const CudaSparseMatrix& matrix);
+    CudaSparseMatrix(Matrix& matrix);
     CudaSparseMatrix() : CudaSparseMatrix(0, 0) {};
+    ~CudaSparseMatrix();
+
+    void genCsc(cusparseHandle_t& handle);
+    void createDescr();
+
+    int calcNonzeroInColumn(const int& p) const;
     
     void getColumn(const int p, CudaDataDenseVector& rhs) const;
+    void addSparseCol(CudaDataDenseVector& vec, const int p, const double alpha);
+    void resetData(
+        cusparseHandle_t& handle,
+        const CudaSparseMatrix& matrix, 
+        const CudaIndexVector& indexes
+    );
     void initI(const int n); // заполняет как единичную матрицу(нужно в начале алгоритма, так как всегда выбираем последние n столбцов)
+    void stackColUnitMatrix(cusparseHandle_t& handle);
+    std::set<int> deleteCols(cusparseHandle_t& handle, std::set<int> cols);
 
-    CudaSparseMatrix& operator=(const CudaSparseMatrix& matrix);
+    // CudaSparseMatrix& operator=(const CudaSparseMatrix& matrix);
     CudaSparseMatrix& operator=(CoinPackedMatrix& matrix);
+    CudaSparseMatrix& operator=(Matrix& matrix);
 
     inline MatrixSize getSize() {return std::make_tuple(m, n);};
     inline MatrixSize getSize() const {return std::make_tuple(m, n);};
@@ -84,16 +110,13 @@ public:
     void dotUpdate(
         cusparseHandle_t& handle, 
         const CudaDataDenseVector& vec1, 
-        const CudaIndexVector& vec1_idx,
-        const bool sparse_vec1,
         const CudaDataDenseVector& vec2, 
         CudaDataDenseVector& sol,
-        const CudaIndexVector& need_ptrs,
-        const int size_ptrs,
-        const double beta,
         const double alpha,
-        const CudaIndexVector& set_idx,
-        const SpmvOptions method
+        const double beta,
+        const CudaIndexVector& col_idx,
+        const SpmvOptions method,
+        const bool set
     );
 
     void LUdecompose(
@@ -102,7 +125,8 @@ public:
         cudssData_t& data,
         cudssHandle_t& handle_T, 
         cudssConfig_t& config_T, 
-        cudssData_t& data_T
+        cudssData_t& data_T,
+        cusparseHandle_t& sp_handle
     );
 
     void solve(
@@ -113,4 +137,6 @@ public:
         CudaDataDenseVector& sol, 
         const bool& transpose
     );
+
+    void show();
 };

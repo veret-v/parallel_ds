@@ -175,9 +175,6 @@ CudaDataDenseVector& CudaDataDenseVector::operator=(const CudaDataDenseVector& v
 
 void CudaDataDenseVector::createDescr()
 {
-    int64_t nrows = size, ncols = size;
-    size_t ldb = ncols, ldx = nrows;
-
     CUSP_CALL_AND_CHECK(
         cusparseCreateDnVec(
             &descr, 
@@ -190,7 +187,7 @@ void CudaDataDenseVector::createDescr()
     CUDSS_CALL_AND_CHECK(
         cudssMatrixCreateDn(
             &cudss_descr, 
-            size, VECTOR_COLS, ldb, 
+            size, VECTOR_COLS, size, 
             device_values, 
             CUDA_R_64F, CUDSS_LAYOUT_COL_MAJOR),
         "cudssMatrixCreateDn"
@@ -205,19 +202,6 @@ void CudaDataDenseVector::createDescr()
 {
     for (int i = 0; i < indexes.getSize(); i++)
         host_values[i] = values_vector.host_values[indexes[i]];
-}
-
-
-void CudaDataDenseVector::addSparseCol(
-    const CudaSparseMatrix& mat, 
-    const int p, const double alpha
-)
-{
-    CudaDataDenseVector buff; 
-    mat.getColumn(p, buff);
-
-    for (int i = 0; i < size; i++)
-        host_values[i] += alpha * buff[i];
 }
 
 
@@ -239,4 +223,69 @@ CudaDataDenseVector& CudaDataDenseVector::operator-()
         buff.host_values[i] = -host_values[i];
 
     return buff;
+}
+
+
+double CudaDataDenseVector::mean() const
+{
+    double sum = 0;
+    for (int i = 0; i < getSize(); i++)
+        sum +=  host_values[i];
+    return sum / getSize();
+}
+
+
+double CudaDataDenseVector::norm() const
+{
+    double sum = 0;
+    for (int i = 0; i < getSize(); i++)
+        sum += pow(host_values[i], 2);
+    return sum;
+}
+
+
+int CudaDataDenseVector::countNonZero() const
+{
+    double count = 0;
+    for (int i = 0; i < getSize(); i++)
+        count += (fabs(host_values[i]) < EPS_Z) ? 0 : 1;
+    return count;
+}
+
+
+void CudaDataDenseVector::deleteVals(std::set<int> idxs)
+{
+    const int new_size = getSize() - idxs.size();
+    double* new_data = NULL;
+    cudaMallocHost(&new_data, new_size*sizeof(double));
+
+    int new_pos = 0;
+    for (int i = 0; i < getSize(); i++)
+        if (idxs.find(i) == idxs.end()) new_data[new_pos++] = host_values[i];
+
+    std::swap(host_values, new_data);
+    cudaFreeHost(new_data);
+}
+
+
+void CudaDataDenseVector::resize(const int& new_size)
+{
+    if (new_size < size)
+    {
+        std::cout << "ERROR: new_size must be  > size" << std::endl;
+        exit(1);
+    }
+    else if (new_size > size)
+    {
+        double* new_data = NULL;
+        cudaMallocHost(&new_data, new_size*sizeof(double));
+
+        for (int i = 0; i < getSize(); i++)
+            new_data[i] = host_values[i];
+
+        std::swap(host_values, new_data);
+        cudaFreeHost(new_data);
+
+        size = new_size;
+    }
 }

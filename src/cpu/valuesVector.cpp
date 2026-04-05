@@ -1,5 +1,9 @@
 #include "valuesVector.hpp"
 
+#ifdef WITH_CUDA
+    #include "../gpu/cudaDataDenseVector.hpp"
+#endif
+
 
 ValuesVector ValuesVector::operator-(const ValuesVector &values_vector) const
 {
@@ -74,6 +78,13 @@ ValuesVector& ValuesVector::operator=(const ValuesVector& values_vector)
     return *this;
 }
 
+#ifdef WITH_CUDA
+        ValuesVector& ValuesVector::operator=(CudaDataDenseVector& values_vector)
+        {
+            double* start_ptr = values_vector.getHostValues();
+            data.assign(start_ptr, start_ptr + values_vector.getSize());
+        }
+#endif
 
 ValuesVector& ValuesVector::operator-=(const ValuesVector& values_vector)
 {
@@ -174,6 +185,15 @@ void ValuesVector::show() const
     for (int i = 0; i < getSize(); i++)
         std::cout << operator[](i) << " ";
     std::cout << std::endl;
+}
+
+
+void ValuesVector::deleteVals(std::set<int> idxs)
+{
+    std::vector<double> new_data;
+    for (int i = 0; i < data.size(); i++)
+        if (idxs.find(i) == idxs.end()) new_data.push_back(data[i]);
+    data = new_data;
 }
 
 

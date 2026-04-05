@@ -27,10 +27,23 @@
 #define EPS_A     1e-5
 #define EPS_Z     1e-12
 #define REFACT_ERR 1e-9
+#define EPS_R      1e-9
+#define EPS_P      1e-7
 
 #define PERTURB_RATIO 0.25
 #define PSI           1e-5
 #define RESTART_CYCLE 1000
+#define CAND_RATIO    0.95
+
+#define MAX_CYCLE     5
+#define NEED_RESTART  500
+#define REFACT_FREQ   400
+#define RESTART_SIZE  5
+#define MAX_ITER      40000
+#define INF           1e+80
+
+#define DEBUG
+
 
 // #define DEBUG
 
@@ -39,22 +52,14 @@ template <typename MatrixType, typename VectorType, typename IndexVectorType>
 class BaseDualSimplex
 {
 protected:
-    enum class Phase1OutStatus
-    {
-        Solved,
-        DualInfeas,
-        NeedRestart
-    };
-
     bool perturbed = false;
 
     int maxcycle;
     int non_basis_size;
     int basis_size;
+    int full_size;
 
     Problem<MatrixType, VectorType>* problem;
-
-    LPsolution solution;
 
     PresolverMethods presolver_method;
     SolverMethods solver_method;
@@ -69,15 +74,15 @@ protected:
     MatrixType B;
 
     double obj_func_val;
+    
 
     virtual SolverMethods    stringToSolverMethod(const std::string& method_name);
     virtual PresolverMethods stringToPreSolverMethod(const std::string& method_name);
 
-    virtual Phase1OutStatus callPresolver(const PresolverMethods method);
-    virtual bool callDualSolver(const SolverMethods method);
-    virtual bool callPrimalSolver();
-
-    virtual void initDualSimplex();
+    virtual Phase1OutStatus  callPresolver(const PresolverMethods method);
+    virtual bool             callDualSolver(const SolverMethods method);
+    virtual bool             callPrimalSolver();
+    virtual void             initReducedCosts(VectorType& vec);
 
     void calcDualInfeasible();
     int counterDualInfeasible() const;
@@ -89,8 +94,8 @@ protected:
     bool checkDualFeasible()   const;
     bool checkPerturbNeed()    const;
 
-    double getWeight(const int i) const;
-    int calcNonzeroInColumn(const int i) const;
+    double getWeight(const int i)           const;
+    int    calcNonzeroInColumn(const int i) const;
 
     bool setDelta(const int& j, double& delta, bool& is_lower);
     bool setRatioTestCandidates(IndexVector& F,const VectorType& tmp_alpha_p);
@@ -99,6 +104,8 @@ public:
     BaseDualSimplex(Problem<MatrixType, VectorType>& _problem);
     
     Phase1OutStatus presolve(const std::string& presolver_method_name);
-    LPsolution solve(const std::string& method_name);
+    void solve(const std::string& method_name);
 };
 
+
+#include "baseDualSimplex.tpp"

@@ -6,37 +6,32 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmakeFindModules")
 
-option(BUILD_TESTS "Build tests" ON)
-option(WITH_CUDA "Build with CUDA support" OFF)
+option(BUILD_TESTS "Build tests" OFF)
+option(WITH_CUDA "Build with CUDA support" ON)
+option(WITH_MPI "Build with MPI support" OFF)
+option(WITH_OPENMP "Build with OPENMP support" OFF)
+option(WITH_AVX "Build with AVX support" OFF)
 
-# testing
-enable_testing()
-
-include(FetchContent)
-FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
-)
-FetchContent_MakeAvailable(googletest)
+add_executable(${PROJECT_NAME})
 
 # COIN Utils library
 find_package(CoinUtils REQUIRED)
 include_directories(${COINUTILS_INCLUDE_DIRS})
-
-add_executable(${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME} ${COINUTILS_LIBRARY})
 
 # OpenMP
-find_package(OpenMP REQUIRED)
-
-if(OpenMP_CXX_FOUND)
-    message(STATUS "OpenMP support found")
+if(WITH_OPENMP)
+    add_compile_definitions(WITH_OPENMP)
+    find_package(OpenMP REQUIRED)
     target_link_libraries(${PROJECT_NAME} OpenMP::OpenMP_CXX)
 endif()
 
 # MPI
-find_package(MPI REQUIRED)
-target_link_libraries(${PROJECT_NAME} MPI::MPI_CXX)
+if(WITH_MPI)
+    add_compile_definitions(WITH_MPI)
+    find_package(MPI REQUIRED)
+    target_link_libraries(${PROJECT_NAME} MPI::MPI_CXX)
+endif()
 
 # Intel MKL
 find_package(MKL REQUIRED)
@@ -64,7 +59,7 @@ if(WITH_CUDA)
         CUDA::cusolver
         CUDA::cublas 
         pthread dl)
-    target_link_libraries(${PROJECT_NAME} cudss)
+    target_link_libraries(${PROJECT_NAME} /usr/lib/x86_64-linux-gnu/libcudss/12/libcudss.so.0.7.1)
     
     set_target_properties(${PROJECT_NAME} PROPERTIES
         CUDA_ARCHITECTURES "native" 
@@ -73,16 +68,26 @@ if(WITH_CUDA)
     )
 endif()
 
-target_sources(${PROJECT_NAME} PRIVATE "src/common/main.cpp" )
+target_sources(${PROJECT_NAME} PRIVATE "src/main.cpp" )
 target_include_directories(${PROJECT_NAME} PRIVATE "${PROJECT_SOURCE_DIR}")
 
 add_subdirectory("src")
 
+
+# testing
 if(BUILD_TESTS)
+    enable_testing()
+    include(FetchContent)
+    FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+    )
+    FetchContent_MakeAvailable(googletest)
 
     add_executable(tests "tests/simple_tests_DS.cpp")
     target_link_libraries(tests PRIVATE app_test gtest_main)
     target_include_directories(tests PRIVATE "${PROJECT_SOURCE_DIR}")
+    
 
     include(GoogleTest)
     gtest_discover_tests(tests)

@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include "mkl.h"
+
 #include "../src/cpu/valuesVector.hpp"
 #include "../src/cpu/matrix.hpp"
 #include "../src/cpu/sequentialDualSimplex.hpp"
@@ -19,19 +21,17 @@ TEST(DualSimplexSimple, Test1)
         BoundaryType::Lower, BoundaryType::Lower, BoundaryType::Lower,
         BoundaryType::Lower,BoundaryType::Lower}; 
     BoundaryTypeVector range_type{BoundaryType::Fixed, BoundaryType::Fixed, BoundaryType::Fixed}; 
-    Matrix A(3, 5);
-    A(0, 1) = 1;
-    A(0, 2) = 0.5;
-    A(0, 4) = 0.5;
-    A(1, 2) = 1;
-    A(1, 3) = 1;
-    A(2, 0) = 1;
-    A(2, 2) = -0.5;
-    A(2, 4) = 0.5;
+    Matrix A(
+        std::vector<double>{1, 0.5, 0.5, 1, 1, 1, -0.5, 0.5},
+        std::vector<MKL_INT>{0, 3, 5, 8},
+        std::vector<MKL_INT>{1, 2, 4, 2, 3, 0, 2, 4},
+        m, n
+    );
     Problem test_problem(
         bound_type, range_type, costs, lower_range, upper_range, 
         lower_bound, upper_bound, A); 
     SequentialDualSimplex solver(test_problem);
+    solver.initDualSimplex();
     solver.presolve("minInfeas");
     LPsolution solution = solver.solve("simple");
 
@@ -56,20 +56,17 @@ TEST(DualSimplexSimple, Test2)
         BoundaryType::Lower, BoundaryType::Lower, BoundaryType::Lower,
         BoundaryType::Lower,BoundaryType::Lower}; 
     BoundaryTypeVector range_type{BoundaryType::Fixed, BoundaryType::Fixed, BoundaryType::Fixed}; 
-    Matrix A(3, 5);
-    A(0, 0) = 1;
-    A(0, 1) = 1;
-    A(0, 4) = -1;
-    A(1, 0) = 5;
-    A(1, 2) = 1;
-    A(1, 4) = 3;
-    A(2, 0) = -5;
-    A(2, 3) = 1;
-    A(2, 4) = 4;
+    Matrix A(
+        std::vector<double>{1, 1, -1, 5, 1, 3, -5, 1, 4},
+        std::vector<MKL_INT>{0, 3, 6, 9},
+        std::vector<MKL_INT>{0, 1, 4, 0, 2, 4, 0, 3, 4},
+        m, n
+    );
     Problem test_problem(
         bound_type, range_type, costs, lower_range, upper_range, 
         lower_bound, upper_bound, A); 
     SequentialDualSimplex solver(test_problem);
+    solver.initDualSimplex();
     solver.presolve("minInfeas");
     LPsolution solution = solver.solve("simple");
 
@@ -92,17 +89,17 @@ TEST(DualSimplexSimple, Test3)
     ValuesVector upper_bound(std::vector<double>{0, 0, 0}); 
     BoundaryTypeVector bound_type{BoundaryType::Lower, BoundaryType::Lower, BoundaryType::Lower}; 
     BoundaryTypeVector range_type{BoundaryType::Upper, BoundaryType::Lower}; 
-    Matrix A(2, 3);
-    A(0, 0) = 2;
-    A(0, 1) = 1;
-    A(0, 2) = 1;
-    A(1, 0) = 3;
-    A(1, 1) = 8;
-    A(1, 2) = 2;
+    Matrix A(
+        std::vector<double>{2, 1, 1, 3, 8, 2},
+        std::vector<MKL_INT>{0, 3, 6},
+        std::vector<MKL_INT>{0, 1, 2, 0, 1, 2},
+        m, n
+    );
     Problem test_problem(
         bound_type, range_type, costs, lower_range, upper_range, 
         lower_bound, upper_bound, A); 
     SequentialDualSimplex solver(test_problem);
+    solver.initDualSimplex();
     solver.presolve("minInfeas");
     LPsolution solution = solver.solve("simple");
 
@@ -126,19 +123,17 @@ TEST(DualSimplexSimple, Test4)
     BoundaryTypeVector bound_type{BoundaryType::Lower, BoundaryType::Lower, BoundaryType::Lower, 
                                                        BoundaryType::Lower, BoundaryType::Lower}; 
     BoundaryTypeVector range_type{BoundaryType::Fixed, BoundaryType::Fixed, BoundaryType::Fixed}; 
-    Matrix A(3, 5);
-    A(0, 0) = 1;
-    A(0, 1) = 1;
-    A(0, 2) = 1;
-    A(1, 0) = 1;
-    A(1, 1) = 3;
-    A(1, 3) = 1;
-    A(2, 0) = 1;
-    A(2, 4) = 1;
+    Matrix A(
+        std::vector<double>{1, 1, 1, 1, 3, 1, 1, 1},
+        std::vector<MKL_INT>{0, 3, 6, 8},
+        std::vector<MKL_INT>{0, 1, 2, 0, 1, 3, 0, 4},
+        m, n
+    );
     Problem test_problem(
         bound_type, range_type, costs, lower_range, upper_range, 
         lower_bound, upper_bound, A); 
     SequentialDualSimplex solver(test_problem);
+    solver.initDualSimplex();
     solver.presolve("minInfeas");
     LPsolution solution = solver.solve("simple");
 

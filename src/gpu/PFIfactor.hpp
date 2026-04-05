@@ -5,9 +5,8 @@
 #include <iostream>
 
 #include <cuda_runtime.h>
-#include <cublas.h>
+#include <cublas_v2.h>
 #include <cusparse.h>
-#include <cublas_api.h>
 #include <cusparse_v2.h>
 #include <cusolverDn.h>
 #include <cusolverRf.h>

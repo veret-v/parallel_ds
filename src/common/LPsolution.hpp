@@ -12,7 +12,6 @@
 #include <queue>
 #include <algorithm>
 
-#include "problem.hpp"
 #include "types.hpp"
 
 #include "../cpu/linalg.hpp"

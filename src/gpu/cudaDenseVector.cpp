@@ -32,7 +32,7 @@ void CudaDenseVector<ValueType>::updateDeviceMem()
     CUDA_CALL_AND_CHECK(
         cudaMemcpy(
             device_values, host_values, 
-            size*sizeof(ValueType), cudaMemcpyDefault),
+            size*sizeof(ValueType), cudaMemcpyHostToDevice),
         "cudaMemcpy"
     );
 }
@@ -44,7 +44,7 @@ void CudaDenseVector<ValueType>::updateHostMem()
     CUDA_CALL_AND_CHECK(
         cudaMemcpy(
             host_values, device_values, 
-            size*sizeof(ValueType), cudaMemcpyDefault),
+            size*sizeof(ValueType), cudaMemcpyDeviceToHost),
         "cudaMemcpy"
     );
 }
@@ -86,7 +86,7 @@ void CudaDenseVector<ValueType>::show() const
 {
     std::cout << "Vector(" << getSize() << "):" << std::endl;
     for (size_t i = 0; i < getSize(); i++)
-        std::cout << operator[](i) << " ";
+        std::cout << host_values[i] << " ";
     std::cout << std::endl;
 }
 
@@ -110,3 +110,7 @@ void CudaDenseVector<ValueType>::copy(
         "cudaMemcpy"
     );
 }
+
+
+template class CudaDenseVector<int>;
+template class CudaDenseVector<double>;

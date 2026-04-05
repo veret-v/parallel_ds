@@ -2,10 +2,10 @@
 
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
-#include <cublas.h>
 #include <cusolverDn.h>
 #include <cusolverRf.h>
 #include <cusolverSp.h>
+#include <iostream>
 
 #include "cudaKernels.hpp"
 
@@ -46,6 +46,26 @@
     } while(0);
 
 
+template<typename ValueType>
+class CudaDenseVectorIterator: public std::iterator<std::input_iterator_tag, ValueType>
+{
+    friend class CudaIndexVector;
+    friend class CudaDataDenseVector;
+private:
+    CudaDenseVectorIterator(ValueType* p) : p(p) {};
+public:
+    CudaDenseVectorIterator(const CudaDenseVectorIterator &it) : p(it.p) {};
+
+    bool operator!=(CudaDenseVectorIterator const& other) const {return p != other.p;};
+    bool operator==(CudaDenseVectorIterator const& other) const {return p == other.p;}; //need for BOOST_FOREACH
+    typename CudaDenseVectorIterator::reference operator*() const {return *p;};
+    CudaDenseVectorIterator& operator++() {++p; return *this;};
+private:
+    ValueType* p;
+};
+
+
+
 cudaStream_t utilCublasGetStreamFromHandle(cublasHandle_t handle); 
 cublasPointerMode_t utilCublasGetPointerMode(cublasHandle_t handle);
 cudaStream_t utilCusparseGetStreamFromHandle(cusparseHandle_t handle); 
@@ -79,34 +99,18 @@ cublasStatus_t btranOrFtran(
 
 cusparseStatus_t spmvUpdateInc(
     cusparseHandle_t handle,
-    const bool sparse_x,
     int nnz,
+    int minor_dim,
     int major_dim,
-    double* y,    
-    const double* x,  
-    const int* x_idx, 
-    const double* val, 
-    const int* id, 
-    const int* ptr,
-    const int* need_ptrs,
+    int target_cols_size,
+    double* sol,    
+    const double* vec1,  
+    const double* vec2,  
+    const double* csr_val,
+    const int* col_ids,
+    const int* row_ptrs,
+    const int* target_cols,
     const double alpha,
-    const double beta
-); 
-
-
-cusparseStatus_t spmvUpdateSet(
-    cusparseHandle_t handle,
-    int nnz,
-    int major_dim,
-    double* y, 
-    const int* set_id,  
-    const int set_id_size,  
-    const double* x,  
-    const double* z, 
-    const double* val, 
-    const int* id, 
-    const int* ptr,
-    const int* need_ptrs,
-    const double alpha,
-    const double beta
+    const double beta,
+    const bool set
 ); 

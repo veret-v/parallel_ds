@@ -7,9 +7,6 @@
 #include <typeinfo>
 
 #include "../cpu/valuesVector.hpp"
-#include "../cpu/matrix.hpp"
-#include "../gpu/cudaSparseMatrix.hpp"
-#include "../gpu/cudaDenseVector.hpp"
 
 
 enum class BoundaryType
@@ -24,29 +21,31 @@ enum class BoundaryType
 
 enum class SolverMethods
 {
-    simpleRatio,
     elaboratedMethod,
     UNKNOWN
+};
+
+enum class Phase1OutStatus
+{
+    Solved,
+    DualInfeas,
+    NeedRestart
 };
 
 enum class PresolverMethods
 {
     minDualInfeasibility,
-    panMethod,
     UNKNOWN
 };
 
 enum class SpmvOptions
 {
-    FULL_UPDATE,
-    SET_UPDATE,
-    FULL_UPDATE_T,
-    SET_UPDATE_T,
+    UPDATE,
+    UPDATE_T,
     UNKNOWN
 };
 
 typedef std::vector<int> IndexVector;
-typedef std::tuple <int, int> cudaMatrixSize;
 typedef std::vector<BoundaryType> BoundaryTypeVector;
 typedef int cudaVectorSize;
 typedef std::tuple <int, int> MatrixSize;

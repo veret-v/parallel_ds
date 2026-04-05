@@ -29,20 +29,25 @@ SolverMethods BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::stringTo
 // Dual simplex method: Phase 1(Find dual feasible basis)
 //----------------------------------------------------------------------------------------
 template <typename MatrixType, typename VectorType, typename IndexVectorType>
-BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::Phase1OutStatus BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::presolve(const std::string& presolver_method_name)
+Phase1OutStatus BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::presolve(const std::string& presolver_method_name)
 {
     std::cout << "Phase 1 : started" << std::endl;
     auto method = stringToPreSolverMethod(presolver_method_name);
     presolver_method = method;
+
     if (checkPerturbNeed())
         perturbCosts();
 
     Phase1OutStatus status = callPresolver(method);
     while(status == Phase1OutStatus::NeedRestart)
     {
-        std::cout << "-- Restart with new random basis" << std::endl;
-        randomBasis();
-        initDualSimplex();
+        std::cout << "-- Restart" << std::endl;
+        for (int i = 0; i < non_basis_size; i++)
+            non_basis_indexes[i] = i;
+    
+        for (int i = 0; i < problem->constraints_size; i++)
+            basis_indexes[i] = i + non_basis_size;
+
         status = callPresolver(method);
     }
     
@@ -89,7 +94,7 @@ BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::Phase1OutStatus BaseDu
 // Choose presolver 
 //----------------------------------------------------------------------------------------
 template <typename MatrixType, typename VectorType, typename IndexVectorType>
-BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::Phase1OutStatus BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::callPresolver(const PresolverMethods method)
+Phase1OutStatus BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::callPresolver(const PresolverMethods method)
 {
     Phase1OutStatus status;
     switch (method) 
@@ -120,6 +125,15 @@ bool BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::callDualSolver(co
 
 
 //----------------------------------------------------------------------------------------
+// Init reduced costs(d)
+//----------------------------------------------------------------------------------------
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
+void BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::initReducedCosts(VectorType& vec)
+{
+}
+
+
+//----------------------------------------------------------------------------------------
 // Choose priaml solver 
 //----------------------------------------------------------------------------------------
 template <typename MatrixType, typename VectorType, typename IndexVectorType>
@@ -132,7 +146,7 @@ bool BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::callPrimalSolver(
 // Dual simplex method: Phase 2(Find solution)
 //----------------------------------------------------------------------------------------
 template <typename MatrixType, typename VectorType, typename IndexVectorType>
-LPsolution BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::solve(const std::string& method_name)
+void BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::solve(const std::string& method_name)
 {
     std::cout << "Phase 2 : started" << std::endl;
 
@@ -144,88 +158,65 @@ LPsolution BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::solve(const
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+   
     std::cout << "time = " << duration_ms << std::endl;
-    solution.phase2_time = static_cast<int>(duration_ms);
-    solution.phase2_time = 0;
-    
+   
     
     if (status_code && perturbed) // optimal solution case
     {
         std::cout << "-- Optimal solution obtained with perturbation" << std::endl;
 
         problem->costs = original_costs;
+        VectorType buff(basis_size);
+        initReducedCosts(buff);
        
-        if (!checkPrimalFeasible() && checkDualFeasible()) 
-        {
-            callDualSolver(method);
-
-            std::cout << "-- Correction in primal infeasible and dual feasible case done" << std::endl;
-        }
-        else if (checkPrimalFeasible() && !checkDualFeasible())
+        if (!checkDualFeasible()) 
         {
             callPrimalSolver();
 
             std::cout << "-- Correction in primal feasible and dual infeasible case done" << std::endl;
         }
-        else if (!checkPrimalFeasible() && !checkDualFeasible())
-        {
-            Phase1OutStatus status_code = callPresolver(presolver_method);
-            while (status_code == Phase1OutStatus::NeedRestart)
-            {    
-                std::cout << "-- Restart phase 1" << std::endl;
-                status_code = callPresolver(presolver_method);
-            }
-
-            if (status_code == Phase1OutStatus::Solved)
-                callDualSolver(method);
-
-            std::cout << "-- Correction in primal infeasible and dual infeasible case done" << std::endl;
-        }
         std::cout << "-- Solution obtained" << std::endl;
 
-        solution.x = x(0, problem->logicals_size);
-        solution.Z = obj_func_val;
+        problem->solution.x = x;
+        problem->solution.Z += obj_func_val;
 
         std::cout << "Phase 2 : ended" << std::endl;
 
-        return solution;
     }
     else if (!status_code && perturbed) // dual unbound case
     {
         std::cout << "-- Unbounded solution obtained with perturbation" << std::endl;
 
-        problem->costs = original_costs;
-        
-        Phase1OutStatus status_code = callPresolver(presolver_method);
-        while (status_code == Phase1OutStatus::NeedRestart)
-        {    
-            std::cout << "-- Restart phase 1" << std::endl;
-            status_code = callPresolver(presolver_method);
-        }
+        // problem->costs = original_costs;
+       
+        // Phase1OutStatus status_code = callPresolver(presolver_method);
+        // while (status_code == Phase1OutStatus::NeedRestart)
+        // {    
+        //     std::cout << "-- Restart phase 1" << std::endl;
+        //     status_code = callPresolver(presolver_method);
+        // }
 
-        if (status_code == Phase1OutStatus::Solved)
-            callDualSolver(method);
+        // if (status_code == Phase1OutStatus::Solved)
+        //     callDualSolver(method);
 
         std::cout << "-- Correction done" << std::endl;
         std::cout << "-- Solution obtained" << std::endl;
 
-        solution.x = x(0, problem->logicals_size);
-        solution.Z = obj_func_val;
+        problem->solution.x = x;
+        problem->solution.Z += obj_func_val;
 
         std::cout << "Phase 2 : ended" << std::endl;
 
-        return solution;
     }
     else  // without perturbation case
     {
         std::cout << "-- Solution obtained" << std::endl;
 
-        solution.x = x(0, problem->logicals_size);
-        solution.Z = obj_func_val;
+        problem->solution.x = x;
+        problem->solution.Z += obj_func_val;
 
         std::cout << "Phase 2 : ended" << std::endl;
-
-        return solution;
     }
 }
 
@@ -240,32 +231,18 @@ BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::BaseDualSimplex(Proble
 
     problem = &_problem;
 
-    non_basis_size = problem->problem_size - problem->constraints_size;
-    basis_size = problem->constraints_size;
+    non_basis_size  = problem->problem_size - problem->constraints_size;
+    basis_size      = problem->constraints_size;
+    full_size       = problem->problem_size;
     
-    basis_indexes = IndexVector(problem->constraints_size);
-    non_basis_indexes = IndexVector(non_basis_size);
+    basis_indexes       = IndexVector(problem->constraints_size);
+    non_basis_indexes   = IndexVector(non_basis_size);
 
     for (int i = 0; i < non_basis_size; i++)
         non_basis_indexes[i] = i;
+    
     for (int i = 0; i < problem->constraints_size; i++)
         basis_indexes[i] = i + non_basis_size;
-
-    std::cout << "Solver initialization : basis columns selected" << std::endl;
-
-    initDualSimplex();
-
-    std::cout << "Solver initialization : attributes setted" << std::endl;    
-    
-}
-
-
-//----------------------------------------------------------------------------------------
-// Init params, setting data according to index arrays
-//----------------------------------------------------------------------------------------
-template <typename MatrixType, typename VectorType, typename IndexVectorType>
-void BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::initDualSimplex()
-{
 }
 
 
@@ -341,7 +318,7 @@ void BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::perturbCosts()
             perturbation = -0.5 * magnitude * (1 + dist(gen));
         perturbation= 0.5 * magnitude * (1 + dist(gen));
         
-        perturbation = getWeight(calcNonzeroInColumn(i)) * perturbation;
+        perturbation = getWeight(problem->A.calcNonzeroInColumn(i)) * perturbation;
 
         while (fabs(perturbation) > fabs(max_perturb) || fabs(perturbation) < fabs(min_perturb))
         {
@@ -382,21 +359,6 @@ double BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::getWeight(const
 
 
 //----------------------------------------------------------------------------------------
-// Calc non zero elements in column of matrix A
-//----------------------------------------------------------------------------------------
-template <typename MatrixType, typename VectorType, typename IndexVectorType>
-int BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::calcNonzeroInColumn(const int i) const
-{
-    int non_zero_num = 0;
-    for (auto a_j : problem->A(i))
-        if (fabs(a_j) > EPS_A)
-            non_zero_num += 1;
-        
-    return non_zero_num;
-}
-
-
-//----------------------------------------------------------------------------------------
 // Check primal feasibility in solver
 //----------------------------------------------------------------------------------------
 template <typename MatrixType, typename VectorType, typename IndexVectorType>
@@ -407,22 +369,23 @@ bool BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::checkPrimalFeasib
         switch (problem->bound_type[i])
         {
         case BoundaryType::Fixed:
-            if (fabs(x[i] - problem->lower_bound[i]) > EPS_BOUND)
+            if (fabs(x[i] - problem->lower_bound[i]) > EPS_P)
                 return false;
             
         case BoundaryType::Free:
             break;
 
         case BoundaryType::Boxed:
-            if (x[i] - problem->upper_bound[i] > EPS_BOUND || problem->lower_bound[i] - x[i] > EPS_BOUND)
+            if (x[i] > problem->upper_bound[i] + EPS_R * problem->upper_bound[i] + EPS_P || 
+                x[i] < problem->lower_bound[i] - EPS_R * problem->lower_bound[i] - EPS_P)
                 return false;
 
         case BoundaryType::Upper:
-            if (x[i] - problem->upper_bound[i] > EPS_BOUND)
+            if (x[i] > problem->upper_bound[i] + EPS_R * problem->upper_bound[i] + EPS_P)
                 return false;
 
         case BoundaryType::Lower:
-            if (problem->lower_bound[i] - x[i] > EPS_BOUND)
+            if (x[i] < problem->lower_bound[i] - EPS_R * problem->lower_bound[i] - EPS_P)
                 return false;
         }
     }
@@ -474,17 +437,17 @@ void BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::calcDualInfeasibl
         switch (problem->bound_type[i])
         {
         case BoundaryType::Free:
-            if (d[i] != 0)
+            if (fabs(d[i]) < EPS_D || std::isnan(d[i]))
                 obj_func_val += d[i];
             break;
 
         case BoundaryType::Upper:
-            if (d[i] > 0)
+            if (d[i] > EPS_D || std::isnan(d[i]))
                 obj_func_val -= d[i];
             break;
 
         case BoundaryType::Lower:
-            if (d[i] < 0)
+            if (d[i] < -EPS_D || std::isnan(d[i]))
                 obj_func_val += d[i];
             break;
         }
@@ -504,17 +467,17 @@ int BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::counterDualInfeasi
         switch (problem->bound_type[i])
         {
         case BoundaryType::Free:
-            if (fabs(d[i]) < EPS_D)
+            if (fabs(d[i]) < EPS_D || std::isnan(d[i]))
                 num += 1;
             break;
 
         case BoundaryType::Upper:
-            if (d[i] > EPS_D)
+            if (d[i] > EPS_D || std::isnan(d[i]))
                 num += 1;
             break;
 
         case BoundaryType::Lower:
-            if (d[i] < -EPS_D)
+            if (d[i] < -EPS_D || std::isnan(d[i]))
                 num += 1;
             break;
         }

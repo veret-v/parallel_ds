@@ -85,22 +85,24 @@ cublasStatus_t betaWeightsUpdateLauncher(
 
 cusparseStatus_t spmvUpdateInc(
     cusparseHandle_t handle,
-    const bool sparse_x,
     int nnz,
+    int minor_dim,
     int major_dim,
-    double* y,    
-    const double* x,  
-    const int* x_idx, 
-    const double* val, 
-    const int* id, 
-    const int* ptr,
-    const int* need_ptrs,
+    int target_cols_size,
+    double* sol,    
+    const double* vec1,  
+    const double* vec2,  
+    const double* csr_val,
+    const int* col_ids,
+    const int* row_ptrs,
+    const int* target_cols,
     const double alpha,
-    const double beta
+    const double beta,
+    const bool set
 )
 {
-    if (major_dim <= 0 || nnz <= 0) return CUSPARSE_STATUS_SUCCESS;
-    if (!x || !y) return CUSPARSE_STATUS_INVALID_VALUE;
+    if (minor_dim <= 0 || major_dim <= 0 || nnz <= 0) return CUSPARSE_STATUS_SUCCESS;
+    if (!vec1 || !vec2) return CUSPARSE_STATUS_INVALID_VALUE;
 
     cudaStream_t stream = utilCusparseGetStreamFromHandle(handle);
     cusparsePointerMode_t pointer_mode = utilCusparseGetPointerMode(handle);
@@ -111,74 +113,37 @@ cusparseStatus_t spmvUpdateInc(
     cudaDeviceProp prop;
     cudaGetDeviceProperties(&prop, device);
 
-    int block_size = (prop.major >= 7) ? 256 : 128;
-    int grid_size = (major_dim + block_size - 1) / block_size;
-    int max_blocks = prop.maxGridSize[0];
-    if (grid_size > max_blocks) grid_size = max_blocks;
+    double* buff = nullptr;
 
-    if (sparse_x)
-    {
-        spmvUpdateSpKernel<<<grid_size, block_size, 0, stream>>>(
-            y, x, x_idx, val, id, ptr, need_ptrs, nnz, major_dim, alpha, beta
-        );
-        cudaDeviceSynchronize();
-    }
-    else
-    {
-        spmvUpdateKernel<<<grid_size, block_size, 0, stream>>>(
-            y, x, val, id, ptr, need_ptrs, nnz, major_dim, alpha, beta
-        );
-        cudaDeviceSynchronize();
-    }
-    
-    
-    cudaError_t cuda_err = cudaGetLastError();
-    if (cuda_err != cudaSuccess) {
-        return CUSPARSE_STATUS_EXECUTION_FAILED;
-    }
-    
-    return CUSPARSE_STATUS_SUCCESS;
-}
-
-
-cusparseStatus_t spmvUpdateSet(
-    cusparseHandle_t handle,
-    int nnz,
-    int major_dim,
-    double* y, 
-    const int* set_id,    
-    const int set_id_size,
-    const double* x,  
-    const double* z, 
-    const double* val, 
-    const int* id, 
-    const int* ptr,
-    const int* need_ptrs,
-    const double alpha,
-    const double beta
-)
-{
-    if (major_dim <= 0 || nnz <= 0) return CUSPARSE_STATUS_SUCCESS;
-    if (!x || !y) return CUSPARSE_STATUS_INVALID_VALUE;
-
-    cudaStream_t stream = utilCusparseGetStreamFromHandle(handle);
-    cusparsePointerMode_t pointer_mode = utilCusparseGetPointerMode(handle);
-
-    int device;
-    cudaGetDevice(&device);
-
-    cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, device);
-
-    int block_size = (prop.major >= 7) ? 256 : 128;
-    int grid_size = (major_dim + block_size - 1) / block_size;
-    int max_blocks = prop.maxGridSize[0];
-    if (grid_size > max_blocks) grid_size = max_blocks;
-
-    spmvUpdateSetKernel<<<grid_size, block_size, 0, stream>>>(
-        y, set_id, set_id_size, x, z, val, id, ptr, need_ptrs, nnz, major_dim, alpha, beta
+    CUDA_CALL_AND_CHECK(
+        cudaMalloc(&buff, minor_dim*sizeof(double)),
+        "cudaMalloc"
     );
+
+    CUDA_CALL_AND_CHECK(
+        cudaMemset(buff, 0, minor_dim*sizeof(double)),
+        "cudaMemset"
+    );
+
+    int block_size = (prop.major >= 7) ? 256 : 128;
+    int grid_size = (major_dim + block_size - 1) / block_size;
+    int max_blocks = prop.maxGridSize[0];
+    if (grid_size > max_blocks) grid_size = max_blocks;
+
+    spmvUpdateKernel<<<grid_size, block_size, 0, stream>>>(
+        sol, vec1, vec2, 
+        csr_val, col_ids, row_ptrs, 
+        target_cols, buff, 
+        target_cols_size, nnz, major_dim, 
+        alpha, beta, set
+    );
+    
     cudaDeviceSynchronize();
+
+    CUDA_CALL_AND_CHECK(
+        cudaFree(buff),
+        "cudaFree"
+    );
     
     cudaError_t cuda_err = cudaGetLastError();
     if (cuda_err != cudaSuccess) {

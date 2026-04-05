@@ -9,7 +9,7 @@
 
 #include <CoinMpsIO.hpp>
 #include <cuda_runtime.h>
-#include <cublas.h>
+#include <cublas_v2.h>
 #include <cusolverDn.h>
 #include <cusolverRf.h>
 #include <cusolverSp.h>
@@ -49,9 +49,6 @@ public:
     CudaDenseVector() : CudaDenseVector(0) {};
     ~CudaDenseVector();
         
-    ValueType operator[](const int idx) const {return host_values[idx];};
-    ValueType operator[](const int idx) {return host_values[idx];};
-
     int getSize() const {return size;};
     int getSize() {return size;};
 

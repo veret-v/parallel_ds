@@ -5,11 +5,54 @@
 //----------------------------------------------------------------------------------------
 void ParallelDualSimplex::initDualSimplex()
 {
+    std::cout << "Solver initialization : basis columns selected" << std::endl;
+
     x = ValuesVector(problem->problem_size);
     d = ValuesVector(problem->problem_size);    
     B = problem->A(basis_indexes);
     B_eta_repr.clear();
-    linalg::PFIdecompose(B, B_eta_repr);
+    B.LUdecompose();
+
+    std::cout << "Solver initialization : attributes setted" << std::endl; 
+}
+
+void ParallelDualSimplex::solveLinSys(
+    ValuesVector&& rhs, 
+    ValuesVector& sol,
+    bool transpose
+)
+{
+    if (transpose)
+    {
+        linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), sol, transpose);
+        B.solve(rhs, sol, transpose);
+    }
+    else
+    {
+        B.solve(rhs, sol, transpose);
+        linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), sol, transpose);
+    }
+    
+}
+
+
+void ParallelDualSimplex::solveLinSys(
+    ValuesVector& rhs, 
+    ValuesVector& sol,
+    bool transpose
+)
+{
+    if (transpose)
+    {
+        linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), sol, transpose);
+        B.solve(rhs, sol, transpose);
+    }
+    else
+    {
+        B.solve(rhs, sol, transpose);
+        linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), sol, transpose);
+    }
+    
 }
 
 
@@ -55,7 +98,7 @@ SolverMethods ParallelDualSimplex::stringToSolverMethod(
 //----------------------------------------------------------------------------------------
 // Choose presolver 
 //----------------------------------------------------------------------------------------
-ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::callPresolver(const PresolverMethods method)
+Phase1OutStatus ParallelDualSimplex::callPresolver(const PresolverMethods method)
 {
     Phase1OutStatus status;
     switch (method) 
@@ -110,8 +153,24 @@ ValuesVector ParallelDualSimplex::initBetaWeights()
 {
     ValuesVector beta(problem->constraints_size);
     for (int i = 0; i < problem->constraints_size; i++)
-        beta[i] = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, i), true).norm();
+        beta[i] = 1;
     return beta;
+}
+
+
+//----------------------------------------------------------------------------------------
+// Init reduced costs(d)
+//----------------------------------------------------------------------------------------
+void ParallelDualSimplex::initReducedCosts(ValuesVector& vec)
+{
+    solveLinSys(problem->costs(basis_indexes), vec, true);
+    problem->A.dotUpdate(
+        vec, problem->costs, 
+        d, -1, 1, 
+        non_basis_indexes, 
+        SpmvOptions::UPDATE_T,
+        true
+    );
 }
 
 
@@ -121,22 +180,22 @@ ValuesVector ParallelDualSimplex::initBetaWeights()
 // Numerical experiments. Mathematical Methods of Operations Research, 55:413–
 // 429, 2002.
 //----------------------------------------------------------------------------------------
-ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibility()
+Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibility()
 {
     // (Step 1) Initialization
     Phase1OutStatus status;
 
-    ValuesVector y(problem->constraints_size);
-    ValuesVector rho(problem->constraints_size);
-    ValuesVector f(problem->constraints_size);
-    ValuesVector columns_change(problem->constraints_size);
-    ValuesVector beta(problem->constraints_size);
-    ValuesVector alpha(non_basis_size);
-    ValuesVector alpha_q;
-    ValuesVector alpha_tmp(non_basis_size);
-    ValuesVector f_tmp(problem->constraints_size);
-    ValuesVector new_eta_matrix(problem->constraints_size);
-    ValuesVector tau(problem->constraints_size);
+    ValuesVector y(basis_size);                     // basis_size
+    ValuesVector rho(basis_size);                   // basis_size
+    ValuesVector f(basis_size);                     // basis_size
+    ValuesVector columns_change(basis_size);        // basis_size
+    ValuesVector beta(basis_size);                  // basis_size
+    ValuesVector alpha(non_basis_size);             // non_basis_size
+    ValuesVector alpha_q;                           // basis_size
+    ValuesVector alpha_tmp(non_basis_size);         // non_basis_size
+    ValuesVector f_tmp(basis_size);                 // basis_size
+    ValuesVector new_eta_matrix(basis_size);        // basis_size
+    ValuesVector tau(basis_size);                   // basis_size
 
     IndexVector inf_u_indexes;
     IndexVector inf_l_indexes;
@@ -147,15 +206,21 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
     std::mt19937                    gen(rd());
     std::uniform_int_distribution<> distrib(0, 1);
     std::uniform_int_distribution<> non_basis_rand(0, non_basis_size);
-    
-    y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
+      
+    solveLinSys(problem->costs(basis_indexes), y, true);
+   
+    y.show();
+    problem->A.show();
+    d.show();
+    problem->costs.show();
     problem->A.dotUpdate(
-        y, stub_index, 
-        problem->costs, 
+        y, problem->costs, 
         d, -1, 1, 
         non_basis_indexes, 
-        SpmvOptions::SET_UPDATE_T
+        SpmvOptions::UPDATE_T,
+        true
     );
+    d.show();
 
     for (int i = 0; i < non_basis_size; i++)
     {
@@ -184,7 +249,7 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
         columns_change -= problem->A(i);
     }
 
-    f = linalg::PFIsolve(B_eta_repr, columns_change, false);
+    solveLinSys(columns_change, f, false);
     
     beta = initBetaWeights();
     int iteration = 0;
@@ -198,16 +263,16 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
         if (!perturbed && cycle_num > MAX_CYCLE) 
         {
             perturbCosts();
-            y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
+            solveLinSys(problem->costs(basis_indexes), y, true);
             problem->A.dotUpdate(
-                y, stub_index, 
-                problem->costs, 
+                y, problem->costs, 
                 d, -1, 1, 
                 non_basis_indexes, 
-                SpmvOptions::SET_UPDATE_T
+                SpmvOptions::UPDATE_T,
+                true
             );
         }
-
+        
         // if (cycle_num > RESTART_CYCLE)
         // {
         //     status = Phase1OutStatus::NeedRestart;
@@ -217,7 +282,7 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
         // (Step 2) Pricing
         int p, p_idx;
         double max_weight = 0;
-        for (int i = 0; i < problem->constraints_size; i++)
+        for (int i = 0; i < basis_size; i++)
         {
             int j = basis_indexes[i];
             if (((problem->bound_type[j] != BoundaryType::Free && problem->bound_type[j] != BoundaryType::Upper) && f[i] > EPS_BOUND) ||
@@ -243,23 +308,23 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
             }
             else if (obj_func_val > 0)
             {
-                solution.solved = false;
-                solution.message = "dual infeasible";
+                problem->solution.solved = false;
+                problem->solution.message = "dual infeasible";
                 status = Phase1OutStatus::DualInfeas;
             }
             break;
         }
         
         // (Step 3) BTran
-        rho = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, p_idx), true);
+        solveLinSys(linalg::unit(basis_size, p_idx), rho, true);
         
         // (Step 4) Pivot row
         problem->A.dotUpdate(
-            rho, stub_index, 
-            problem->costs, 
+            rho, problem->costs, 
             alpha, 1, 0, 
             non_basis_indexes, 
-            SpmvOptions::FULL_UPDATE_T
+            SpmvOptions::UPDATE_T,
+            false
         );
 
         // (Step 5) Ratio Test
@@ -323,12 +388,12 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
         theta = d[q] / alpha[q_idx];
         
         // (Step 6) FTran
-        alpha_q = linalg::PFIsolve(B_eta_repr, problem->A(q), false);
+        solveLinSys(problem->A(q), alpha_q, false);
 
         if (iteration % REFACT_FREQ == 0)
         {
             B_eta_repr.clear();
-            linalg::PFIdecompose(B, B_eta_repr);
+            B.LUdecompose();
         }
 
         // (Step 7) Basis change and update
@@ -342,8 +407,8 @@ ParallelDualSimplex::Phase1OutStatus ParallelDualSimplex::minimizeDualInfeasibil
         d[p] = -theta;
         d[q] = 0;
         
-        tau = linalg::PFIsolve(B_eta_repr, rho, false);
-        for (int i = 0; i < problem->constraints_size; i++)
+        solveLinSys(rho, tau, false);
+        for (int i = 0; i < basis_size; i++)
         {
             int j = basis_indexes[i];
             f[i] = (i != p_idx) ? f[i] - alpha_q[i] / alpha_q[p_idx] * f[p_idx] : f[p_idx];
@@ -402,6 +467,7 @@ bool ParallelDualSimplex::elaboratedMethod()
     ValuesVector delta_xB(basis_size);
     ValuesVector tau(problem->constraints_size);
     ValuesVector new_eta_matrix(problem->constraints_size);
+    ValuesVector buff_sol(basis_size);
 
     IndexVector pivot_candidats(max_candidates_num);
     IndexVector stub_index;
@@ -412,20 +478,21 @@ bool ParallelDualSimplex::elaboratedMethod()
     std::uniform_int_distribution<> non_basis_rand(0, non_basis_size);
      
     problem->A.dotUpdate(
-        x, non_basis_indexes, 
-        problem->RHS, 
+        x, problem->RHS, 
         problem->RHS, -1, 1, 
         non_basis_indexes, 
-        SpmvOptions::FULL_UPDATE
+        SpmvOptions::UPDATE,
+        true
     );
-    x.setValues(linalg::PFIsolve(B_eta_repr, problem->RHS, false), basis_indexes);
-    y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
+    solveLinSys(problem->RHS, buff_sol, false);
+    x.setValues(y, basis_indexes);
+    solveLinSys( problem->costs(basis_indexes), y, true);
     problem->A.dotUpdate(
-        y, non_basis_indexes, 
-        problem->costs, 
+        y, problem->costs, 
         d, -1, 1, 
         non_basis_indexes, 
-        SpmvOptions::SET_UPDATE_T
+        SpmvOptions::UPDATE_T,
+        true
     );
     obj_func_val = problem->costs.dot(x);
 
@@ -438,13 +505,13 @@ bool ParallelDualSimplex::elaboratedMethod()
         if (!perturbed && cycle_num > MAX_CYCLE) 
         {
             perturbCosts();
-            y = linalg::PFIsolve(B_eta_repr, problem->costs(basis_indexes), true);
+            solveLinSys( problem->costs(basis_indexes), y, true);
             problem->A.dotUpdate(
-                y, non_basis_indexes, 
-                problem->costs, 
+                y, problem->costs, 
                 d, -1, 1, 
                 non_basis_indexes, 
-                SpmvOptions::SET_UPDATE_T
+                SpmvOptions::UPDATE_T,
+                true
             );
             obj_func_val = problem->costs.dot(x);
         }
@@ -456,8 +523,8 @@ bool ParallelDualSimplex::elaboratedMethod()
         // (Step 2) Pricing
         if (checkPrimalFeasible())
         {
-            solution.solved = true;
-            solution.message = "optimal solution";
+            problem->solution.solved = true;
+            problem->solution.message = "optimal solution";
             break;
         }
         
@@ -500,15 +567,15 @@ bool ParallelDualSimplex::elaboratedMethod()
             bool _ = setDelta(p, delta, is_lower);
             
             // (Step 3) BTran
-            rho = linalg::PFIsolve(B_eta_repr, linalg::unit(problem->constraints_size, p_idx), true);
+            solveLinSys(linalg::unit(problem->constraints_size, p_idx), rho, true);
 
             // (Step 4) Pivot row
             problem->A.dotUpdate(
-                rho, stub_index, 
-                problem->costs, 
+                rho, problem->costs, 
                 alpha_p, 1, 0, 
                 non_basis_indexes, 
-                SpmvOptions::FULL_UPDATE_T
+                SpmvOptions::UPDATE_T,
+                false
             );
 
             // (Step 5) Ratio Test
@@ -563,7 +630,7 @@ bool ParallelDualSimplex::elaboratedMethod()
             }
 
             // (Step 6) FTran
-            alpha_q = linalg::PFIsolve(B_eta_repr, problem->A(q), false);
+            solveLinSys(problem->A(q), alpha_q, false);
 
             // (Step 7) Basis change and update
 
@@ -598,8 +665,8 @@ bool ParallelDualSimplex::elaboratedMethod()
             ValuesVector updated_x = x;
             if (!infeas_idx.size())
             {
-                delta_xB = linalg::PFIsolve(B_eta_repr, column_change, false);
-                updated_x.setValues(updated_x(basis_indexes) - delta_xB, basis_indexes);
+                solveLinSys(column_change, delta_xB, false);
+                x.setValues(x(basis_indexes) - delta_xB, basis_indexes);
                 for (int i = 0; i < problem->constraints_size; i++)
                 {
                     int j = basis_indexes[i];
@@ -610,7 +677,7 @@ bool ParallelDualSimplex::elaboratedMethod()
             // Update xB, DSE weights
             double theta_P = delta / alpha_q[p_idx];
             ValuesVector updated_beta = beta;
-            tau = linalg::PFIsolve(B_eta_repr, rho, false);
+            solveLinSys(rho, tau, false);
             for (int i = 0; i < problem->constraints_size; i++)
             {
                 int j = basis_indexes[i];
@@ -644,8 +711,8 @@ bool ParallelDualSimplex::elaboratedMethod()
 
         if (dual_unbound_counter == candidates_num)
         {
-            solution.solved = false;
-            solution.message = "dual unbounded";
+            problem->solution.solved = false;
+            problem->solution.message = "dual unbounded";
             break;
         }
         
@@ -661,7 +728,7 @@ bool ParallelDualSimplex::elaboratedMethod()
 
         // Update basis
         ValuesVector opt_alpha_q;
-        opt_alpha_q = linalg::PFIsolve(B_eta_repr, problem->A(opt_q), false);
+        solveLinSys(problem->A(opt_q), opt_alpha_q, false);
 
         for (int i = 0; i < problem->constraints_size; i++)
             new_eta_matrix[i] = (i != opt_p_idx) ? -opt_alpha_q[i] / opt_alpha_q[opt_p_idx] : 1 / opt_alpha_q[opt_p_idx]; 
@@ -675,7 +742,7 @@ bool ParallelDualSimplex::elaboratedMethod()
         if (fabs(Z_deltas[opt_cand_id]) < EPS_A) cycle_num += 1;
     }
     std::cout << "iterations = " << iteration << std::endl;
-    return solution.solved;
+    return problem->solution.solved;
 }
 
 

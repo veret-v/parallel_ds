@@ -58,126 +58,49 @@ __global__ void betaWeightsUpdateKernelOpt(
 
 
 __global__ void spmvUpdateKernel(    
-    double* y,
-    const double* x,
+    double* sol,
+    const double* vec1,
+    const double* vec2,
     const double* val_csr,
     const int* id_csr,
     const int* ptr_csr,
-    const int* need_ptrs,
+    const int* cols_idx,
+    double* buff,
+    const int cols_idx_size,
     const int nnz,
     const int major_dim,
     const double alpha,
-    const double beta
+    const double beta,
+    const bool set
 )
 {
-    __shared__ double t_sum[WARP_SIZE]; 
-    int j;
-
     int t_id = threadIdx.x + blockDim.x * blockIdx.x; 
-    int t_warp = t_id & WARP_SIZE; 
-
+    int t_warp = t_id % WARP_SIZE; 
+    int warp_id = t_id / WARP_SIZE;
     int stride = blockDim.x * gridDim.x;
-    
-    for (int row = t_id / WARP_SIZE; row < major_dim; row += stride)
+    int warp_stride = (blockDim.x * gridDim.x + WARP_SIZE - 1) / WARP_SIZE;
+
+    for (int col_id = t_id; col_id < cols_idx_size; col_id += stride)
+        buff[cols_idx[col_id]] = vec1[set ? cols_idx[col_id] : col_id];
+
+    __syncthreads();
+
+    for (int row = warp_id; row < major_dim; row += warp_stride)
     {
-        t_sum[threadIdx.x] = 0;
+        double sum = 0.0;
 
-        for (j = ptr_csr[need_ptrs[row]] + t_warp; j < ptr_csr[need_ptrs[row] + 1]; j += WARP_SIZE)
-            t_sum[threadIdx.x] += val_csr[j] * x[id_csr[j]];
+        for (int j = ptr_csr[row] + t_warp; j < ptr_csr[row + 1]; j += WARP_SIZE)
+            sum += val_csr[j] * buff[id_csr[j]];
 
-        if (t_warp < 16) t_sum[threadIdx.x] += t_sum[threadIdx.x + 16];
-        if (t_warp < 8)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 8];
-        if (t_warp < 4)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 4];
-        if (t_warp < 2)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 2];
-        if (t_warp < 1)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 1];
-        
+        #pragma unroll
+        for (int offset = 16; offset > 0; offset /= 2) 
+            sum += __shfl_down_sync(0xFFFFFFFF, sum, offset);
+
         if (t_warp == 0)
-            y[row] = beta * y[row] + alpha * t_sum[threadIdx.x];
-    }
-}
-
-
-__global__ void spmvUpdateSpKernel(    
-    double* y,
-    const double* x,
-    const int* x_idx, 
-    const double* val_csr,
-    const int* id_csr,
-    const int* ptr_csr,
-    const int* need_ptrs,
-    const int nnz,
-    const int major_dim,
-    const double alpha,
-    const double beta
-)
-{
-    __shared__ double t_sum[WARP_SIZE]; 
-    int j;
-
-    int t_id = threadIdx.x + blockDim.x * blockIdx.x; 
-    int t_warp = t_id & WARP_SIZE; 
-
-    int stride = blockDim.x * gridDim.x;
-    
-    for (int row = t_id / WARP_SIZE; row < major_dim; row += stride)
-    {
-        t_sum[threadIdx.x] = 0;
-
-        for (j = ptr_csr[need_ptrs[row]] + t_warp; j < ptr_csr[need_ptrs[row] + 1]; j += WARP_SIZE)
-            t_sum[threadIdx.x] += val_csr[j] * x[x_idx[id_csr[j]]];
-
-        if (t_warp < 16) t_sum[threadIdx.x] += t_sum[threadIdx.x + 16];
-        if (t_warp < 8)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 8];
-        if (t_warp < 4)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 4];
-        if (t_warp < 2)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 2];
-        if (t_warp < 1)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 1];
-        
-        if (t_warp == 0)
-            y[row] = beta * y[row] + alpha * t_sum[threadIdx.x];
-    }
-}
-
-
-__global__ void spmvUpdateSetKernel(    
-    double *y,
-    const int *set_id,
-    const int set_id_size,
-    const double *x,
-    const double *z,
-    const double *val_csr,
-    const int *id_csr,
-    const int *ptr_csr,
-    const int* need_ptrs,
-    const int nnz,
-    const int major_dim,
-    const double alpha,
-    const double beta
-)
-{
-    __shared__ double t_sum[WARP_SIZE]; 
-    int j;
-
-    int t_id = threadIdx.x + blockDim.x * blockIdx.x; 
-    int t_warp = t_id & WARP_SIZE; 
-
-    int stride = blockDim.x * gridDim.x;
-    
-    for (int i = t_id / WARP_SIZE; i < set_id_size; i += stride)
-    {
-        int row = set_id[i];
-        t_sum[threadIdx.x] = 0;
-
-        for (j = ptr_csr[need_ptrs[row]] + t_warp; j < ptr_csr[need_ptrs[row] + 1]; j += WARP_SIZE)
-            t_sum[threadIdx.x] += val_csr[j] * x[id_csr[j]];
-
-        if (t_warp < 16) t_sum[threadIdx.x] += t_sum[threadIdx.x + 16];
-        if (t_warp < 8)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 8];
-        if (t_warp < 4)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 4];
-        if (t_warp < 2)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 2];
-        if (t_warp < 1)  t_sum[threadIdx.x] += t_sum[threadIdx.x + 1];
-        
-        if (t_warp == 0)
-            y[row] = beta * z[row] + alpha * t_sum[threadIdx.x];
+        {
+            sol[row] = beta * vec2[row] + alpha * sum;
+            printf("Debug: row=%d, val=%f, dim=%d\n", row, sum, major_dim);
+        }
     }
 }
 
@@ -228,7 +151,7 @@ __global__ void applyPFIKernel(
                 col_len
             );
         
-            cudaDeviceSynchronize();
+            __syncthreads();
         }
     }
 }
@@ -288,8 +211,13 @@ __global__ void applyPFITKernel(
                 col_len
             );
         
-            cudaDeviceSynchronize();
+            __syncthreads();
         }
     }
 }
 
+
+template __global__ void betaWeightsUpdateKernelOpt<256, 4>(
+    int n, const double* x, int incx,
+    const double* y, int incy,
+    double* z, int incz, int pivot_idx);
