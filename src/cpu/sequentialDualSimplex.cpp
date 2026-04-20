@@ -208,7 +208,6 @@ Phase1OutStatus SequentialDualSimplex::minimizeDualInfeasibility()
 
     IndexVector inf_u_indexes;
     IndexVector inf_l_indexes;
-    IndexVector inf_f_indexes;
     IndexVector stub_index;
 
     std::random_device              rd;
@@ -235,9 +234,6 @@ Phase1OutStatus SequentialDualSimplex::minimizeDualInfeasibility()
         else if ((problem->bound_type[j] == BoundaryType::Lower || 
             problem->bound_type[j] == BoundaryType::Free) && d[j] < -EPS_D)
             inf_l_indexes.push_back(j);
-
-        if (problem->bound_type[j] == BoundaryType::Free && d[j] < -EPS_D)
-            inf_f_indexes.push_back(i);
     }
 
     obj_func_val = 0;
@@ -256,6 +252,7 @@ Phase1OutStatus SequentialDualSimplex::minimizeDualInfeasibility()
     solveLinSys(columns_change, f, false);
     
     beta = initBetaWeights();
+
     int iteration = 0;
     int cycle_num = 0;
 
@@ -289,10 +286,10 @@ Phase1OutStatus SequentialDualSimplex::minimizeDualInfeasibility()
         double weight_tmp;
         bool candid_find = false;
         int p, p_idx;
+
         for (int i = 0; i < basis_size; i++)
         {
             int j = basis_indexes[i];
-            bool alt_candid = false;
             if ((problem->bound_type[j] == BoundaryType::Lower && f[i] > EPS_BOUND) ||
                 (problem->bound_type[j] == BoundaryType::Upper && f[i] < -EPS_BOUND) ||
                 problem->bound_type[j] == BoundaryType::Boxed ||
@@ -392,7 +389,10 @@ Phase1OutStatus SequentialDualSimplex::minimizeDualInfeasibility()
         
         // (Step 6) FTran
         buff = problem->A(q);
+        buff.show();
+        problem->A.show();
         solveLinSys(buff, alpha_q, false);
+        alpha_q.show();
         
         // (Step 7) Basis change and update
         double infisib_corr = 0;
@@ -405,7 +405,6 @@ Phase1OutStatus SequentialDualSimplex::minimizeDualInfeasibility()
         
         
         obj_func_val = obj_func_val - theta * f[p_idx];
-        double step = theta * f[p_idx];
         for (int i = 0; i < non_basis_indexes.size(); i++)
         {
             int j = non_basis_indexes[i];
@@ -431,13 +430,10 @@ Phase1OutStatus SequentialDualSimplex::minimizeDualInfeasibility()
     
         B_eta_repr.push_back(EtaMatrix(new_eta_matrix, p_idx));
 
-        if (fabs(step) < EPS_A) 
-            cycle_num += 1;
-        else
-            cycle_num = 0;
+        cycle_num = (fabs(theta) < EPS_A) ? cycle_num + 1 : 0;
 
         #ifdef DEBUG
-            std::cout << iteration << " : Z = "<< obj_func_val << " inf_num = " << counterDualInfeasible() << " p_info:" << p << " q_info:" << q << std::endl;  
+            std::cout << iteration << " : Z = "<< obj_func_val << " inf_num = " << counterDualInfeasible() << " p_info:" << p << " q_info:" << q << " f:" << f[p_idx] << " beta:" << beta[p_idx] << " alpha_q:" << alpha_q[p_idx] << std::endl;  
         #endif
     }
     return status;

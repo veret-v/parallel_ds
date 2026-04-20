@@ -14,15 +14,6 @@ void CudaDenseVector<ValueType>::allocateMemory(int size)
         cudaMalloc(&device_values, size*sizeof(ValueType)),
         "cudaMalloc"
     );
-
-    CUDA_CALL_AND_CHECK(
-        cudaMemset(device_values, 0, size*sizeof(ValueType)),
-        "cudaMemset"
-    );
-    CUDA_CALL_AND_CHECK(
-        cudaMemset(host_values, 0, size*sizeof(ValueType)),
-        "cudaMemset"
-    );
 }
 
 
@@ -33,7 +24,7 @@ void CudaDenseVector<ValueType>::updateDeviceMem()
         cudaMemcpy(
             device_values, host_values, 
             size*sizeof(ValueType), cudaMemcpyHostToDevice),
-        "cudaMemcpy"
+        "updateDeviceMem : cudaMemcpy"
     );
 }
 
@@ -45,7 +36,7 @@ void CudaDenseVector<ValueType>::updateHostMem()
         cudaMemcpy(
             host_values, device_values, 
             size*sizeof(ValueType), cudaMemcpyDeviceToHost),
-        "cudaMemcpy"
+        "updateHostMem : cudaMemcpy"
     );
 }
 

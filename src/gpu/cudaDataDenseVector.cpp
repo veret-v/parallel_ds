@@ -18,6 +18,11 @@ void CudaDataDenseVector::destroyDescr()
 CudaDataDenseVector::CudaDataDenseVector(const int size)
 {
     allocateMemory(size);
+
+    for (size_t i = 0; i < size; i++)
+        host_values[i] = 0;
+    updateDeviceMem();
+
     createDescr();
 }
 
@@ -144,15 +149,16 @@ CudaDataDenseVector& CudaDataDenseVector::operator=(const CudaDataDenseVector& v
 {
     if (this == &values_vector) 
         return *this;
-    
+
     if (host_values != nullptr || 
         device_values != nullptr) 
         freeMemory();
 
     if (descr != nullptr) destroyDescr();
-
-    allocateMemory(values_vector.getSize());
-
+    
+    size = values_vector.getSize();
+    allocateMemory(size);
+            
     CUDA_CALL_AND_CHECK(
         cudaMemcpy(
             host_values, values_vector.host_values, 
@@ -216,13 +222,37 @@ void CudaDataDenseVector::initUnitVec(const int p)
 }
 
 
+void CudaDataDenseVector::multiplyHostData(const double& alpha)
+{
+    for (int i = 0; i < size; i++)
+        host_values[i] = alpha * host_values[i];
+}
+
+
 CudaDataDenseVector& CudaDataDenseVector::operator-()
 {
-    CudaDataDenseVector buff(size); 
+    CudaDataDenseVector buff(*this);  
     for (int i = 0; i < size; i++)
-        buff.host_values[i] = -host_values[i];
-
+        buff.host_values[i] = -buff.host_values[i];
     return buff;
+}
+
+
+std::vector<double>& CudaDataDenseVector::operator-(const CudaDataDenseVector& values_vector)
+{
+    if (values_vector.getSize() != size)
+    {
+        std::cout << "ERROR: size != values_vector.size" << std::endl;
+        exit(1);
+    }
+
+    std::vector<double> new_vec(size);
+    for (int i = 0; i < size; i++)
+    {
+        new_vec[i] = host_values[i] - values_vector.host_values[i];
+    }
+    
+    return new_vec;
 }
 
 
@@ -257,14 +287,24 @@ void CudaDataDenseVector::deleteVals(std::set<int> idxs)
 {
     const int new_size = getSize() - idxs.size();
     double* new_data = NULL;
+    double* device_new_data = NULL;
+
     cudaMallocHost(&new_data, new_size*sizeof(double));
+    cudaMalloc(&device_new_data, new_size*sizeof(double));
 
     int new_pos = 0;
     for (int i = 0; i < getSize(); i++)
         if (idxs.find(i) == idxs.end()) new_data[new_pos++] = host_values[i];
 
     std::swap(host_values, new_data);
+    std::swap(device_values, device_new_data);
+
     cudaFreeHost(new_data);
+    cudaFree(device_new_data);
+
+    size = new_size;
+
+    updateDeviceMem();
 }
 
 
@@ -278,14 +318,22 @@ void CudaDataDenseVector::resize(const int& new_size)
     else if (new_size > size)
     {
         double* new_data = NULL;
+        double* device_new_data = NULL;
+
         cudaMallocHost(&new_data, new_size*sizeof(double));
+        cudaMalloc(&device_new_data, new_size*sizeof(double));
 
         for (int i = 0; i < getSize(); i++)
             new_data[i] = host_values[i];
 
         std::swap(host_values, new_data);
+        std::swap(device_values, device_new_data);
+
         cudaFreeHost(new_data);
+        cudaFree(device_new_data);
 
         size = new_size;
+
+        updateDeviceMem();
     }
 }

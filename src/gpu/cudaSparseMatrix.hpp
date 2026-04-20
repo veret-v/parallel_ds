@@ -88,8 +88,13 @@ public:
 
     int calcNonzeroInColumn(const int& p) const;
     
-    void getColumn(const int p, CudaDataDenseVector& rhs) const;
-    void addSparseCol(CudaDataDenseVector& vec, const int p, const double alpha);
+    void getColumn(cusparseHandle_t& handle, const int p, CudaDataDenseVector& rhs) const;
+    void addSparseCol(
+        cusparseHandle_t& handle, CudaDataDenseVector& vec, 
+        const IndexVector& cols, const std::vector<double>& alpha);
+    void addSparseCol(
+        cusparseHandle_t& handle, CudaDataDenseVector& vec, 
+        const IndexVector& cols, const double& alpha);
     void resetData(
         cusparseHandle_t& handle,
         const CudaSparseMatrix& matrix, 
@@ -125,8 +130,7 @@ public:
         cudssData_t& data,
         cudssHandle_t& handle_T, 
         cudssConfig_t& config_T, 
-        cudssData_t& data_T,
-        cusparseHandle_t& sp_handle
+        cudssData_t& data_T
     );
 
     void solve(

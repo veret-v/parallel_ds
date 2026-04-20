@@ -99,8 +99,97 @@ __global__ void spmvUpdateKernel(
         if (t_warp == 0)
         {
             sol[row] = beta * vec2[row] + alpha * sum;
-            printf("Debug: row=%d, val=%f, dim=%d\n", row, sum, major_dim);
+            // printf("Debug: row=%d, val=%f, dim=%d\n", row, sum, major_dim);
         }
+    }
+}
+
+
+__global__ void spmvUpdateTKernel(    
+    double* sol,
+    const double* vec1,
+    const double* vec2,
+    const double* val_csr,
+    const int* id_csr,
+    const int* ptr_csr,
+    const int* cols_idx,
+    double* buff,
+    const int cols_idx_size,
+    const int nnz,
+    const int major_dim,
+    const double alpha,
+    const double beta,
+    const bool set
+)
+{
+    int t_id = threadIdx.x + blockDim.x * blockIdx.x; 
+    int t_warp = t_id % WARP_SIZE; 
+    int warp_id = t_id / WARP_SIZE;
+    int stride = blockDim.x * gridDim.x;
+    int warp_stride = (blockDim.x * gridDim.x + WARP_SIZE - 1) / WARP_SIZE;
+
+    for (int row = warp_id; row < major_dim; row += warp_stride)
+    {
+        double sum = 0.0;
+
+        for (int j = ptr_csr[row] + t_warp; j < ptr_csr[row + 1]; j += WARP_SIZE)
+            sum += val_csr[j] * vec1[id_csr[j]];
+
+        #pragma unroll
+        for (int offset = 16; offset > 0; offset /= 2) 
+            sum += __shfl_down_sync(0xFFFFFFFF, sum, offset);
+
+        if (t_warp == 0)
+        {
+            buff[row] = alpha * sum;
+            // printf("Debug: row=%d, val=%f, dim=%d\n", row, sum, major_dim);
+        }
+    }
+
+    __syncthreads();
+
+    for (int col_id = t_id; col_id < cols_idx_size; col_id += stride)
+    {
+        int col_id_it = cols_idx[col_id];
+        // printf("Debug: row=%d, val=%f, dim=%d\n", col_id_it, vec2[col_id_it], major_dim);
+        sol[set ? col_id_it : col_id] = buff[col_id_it] + beta * vec2[col_id_it];
+    }
+}
+
+
+__global__ void addSpColsToVecKernel(    
+    double* vec,
+    const double* val_csc,
+    const int* id_csc,
+    const int* ptr_csc,
+    const int col_idx,
+    const double alpha
+)
+{
+    int t_id = threadIdx.x + blockDim.x * blockIdx.x; 
+    int stride = blockDim.x * gridDim.x;
+
+    for (int row = ptr_csc[col_idx] + t_id; row < ptr_csc[col_idx + 1]; row += stride)
+    {
+        vec[id_csc[row]] += alpha * val_csc[row];
+    }
+}
+
+
+__global__ void getColFromSpKernel(    
+    double* vec,
+    const double* val_csc,
+    const int* id_csc,
+    const int* ptr_csc,
+    const int col_idx
+)
+{
+    int t_id = threadIdx.x + blockDim.x * blockIdx.x; 
+    int stride = blockDim.x * gridDim.x;
+
+    for (int row = ptr_csc[col_idx] + t_id; row < ptr_csc[col_idx + 1]; row += stride)
+    {
+        vec[id_csc[row]] = val_csc[row];
     }
 }
 
@@ -118,42 +207,13 @@ __global__ void applyEtaMatKernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
     
-    for (i; i < col_len; i += stride)
+    for (; i < col_len; i += stride)
     {
-        if (i != device_col_id[eta_num])
-            y[i] = x[i] + x[device_col_id[eta_num]] * device_values[i + eta_num * col_len]; 
-        else
-            y[i] = x[device_col_id[eta_num]] * device_values[i + eta_num * col_len]; 
+        int col_num = device_col_id[eta_num];
+        double eta_fact_val_i = x[col_num] * device_values[i + eta_num * col_len];
+        y[i] = (i != col_num) ? x[i] + eta_fact_val_i : eta_fact_val_i; 
     }
     
-}
-
-
-__global__ void applyPFIKernel(    
-    double *y,
-    const double *x,
-    const double *device_values,
-    const int *device_col_id,
-    const int size,
-    const int col_len
-)
-{
-    int idx = threadIdx.x + blockIdx.x * blockDim.x;
-    
-    if (idx == 0) {  
-        int numBlocks = (col_len + WARP_SIZE - 1) / WARP_SIZE;
-        
-        for (int i = 0; i >= size; i++)
-        {
-            applyEtaMatKernel<<<numBlocks, WARP_SIZE>>>(
-                y, x, device_values, 
-                device_col_id, i, 
-                col_len
-            );
-        
-            __syncthreads();
-        }
-    }
 }
 
 
@@ -166,55 +226,34 @@ __global__ void applyEtaMatTKernel(
     const int col_len
 )
 {
-    __shared__ double sdata[WARP_SIZE];
+    extern __shared__ double sdata[];   // динамический размер (blockDim.x)
     int tid = threadIdx.x;
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int i = blockIdx.x * blockDim.x + tid;
     int stride = blockDim.x * gridDim.x;
 
-    for (i; i < col_len; i += stride)
-        sdata[tid] = x[i] * device_values[i + eta_num * col_len];
+    // printf("Debug: id=%d val=%f al=%f\n", i, x[i], device_values[i + eta_num * col_len]);
+    double sum = 0.0;
+    for (; i < col_len; i += stride) {
+        sum += x[i] * device_values[i + eta_num * col_len];
+    }
 
+    sdata[tid] = sum;
     __syncthreads();
 
-    for(int s = blockDim.x / 2; s > 0; s >>= 1) {
+    // Редукция внутри блока (суммирование)
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
         if (tid < s) {
             sdata[tid] += sdata[tid + s];
         }
         __syncthreads();
     }
 
-    if (tid == 0) 
-        atomicAdd(y + device_col_id[eta_num], sdata[0]);
-}
-
-
-
-__global__ void applyPFITKernel(    
-    double *y,
-    const double *x,
-    const double *device_values,
-    const int *device_col_id,
-    const int size,
-    const int col_len
-)
-{
-    int idx = threadIdx.x + blockIdx.x * blockDim.x;
-    
-    if (idx == 0) {  
-        int numBlocks = (col_len + WARP_SIZE - 1) / WARP_SIZE;
-        
-        for (int i = size - 1; i >= 0; i--)
-        {
-            applyEtaMatTKernel<<<numBlocks, WARP_SIZE>>>(
-                y, x, device_values, 
-                device_col_id, i, 
-                col_len
-            );
-        
-            __syncthreads();
-        }
+    if (tid == 0) {
+        // printf("Debug: result id=%d val=%f\n", tid, sdata[0]);
+        atomicAdd(&y[device_col_id[eta_num]], sdata[0]);
     }
 }
+
 
 
 template __global__ void betaWeightsUpdateKernelOpt<256, 4>(

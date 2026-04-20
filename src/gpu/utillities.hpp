@@ -72,6 +72,31 @@ cudaStream_t utilCusparseGetStreamFromHandle(cusparseHandle_t handle);
 cusparsePointerMode_t utilCusparseGetPointerMode(cusparseHandle_t handle);
 
 
+cusparseStatus_t getColFromSp(
+    cusparseHandle_t handle,
+    int m,
+    int n,
+    int p,
+    double* vec,    
+    const double* csc_val,
+    const int* col_ids,
+    const int* row_ptrs
+);
+
+
+cusparseStatus_t addSpColsToVec(
+    cusparseHandle_t handle,
+    int m,
+    int n,
+    int p,
+    double* vec,    
+    const double* csc_val,
+    const int* col_ids,
+    const int* row_ptrs,
+    const double alpha
+);
+
+
 cublasStatus_t betaWeightsUpdateLauncher(
     cublasHandle_t handle,
     int n,
@@ -100,8 +125,8 @@ cublasStatus_t btranOrFtran(
 cusparseStatus_t spmvUpdateInc(
     cusparseHandle_t handle,
     int nnz,
-    int minor_dim,
-    int major_dim,
+    int m,
+    int n,
     int target_cols_size,
     double* sol,    
     const double* vec1,  
@@ -112,5 +137,6 @@ cusparseStatus_t spmvUpdateInc(
     const int* target_cols,
     const double alpha,
     const double beta,
-    const bool set
+    const bool set,
+    const bool transpose
 ); 

@@ -48,4 +48,6 @@ public:
         const bool transpose
     );
     void resetPFI() {size = 0;};
+
+    int getSize() {return size;};
 };

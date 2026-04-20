@@ -74,8 +74,7 @@ void CudaDualSimplex::initDualSimplex()
     B.createDescr();
     B.LUdecompose(
         cudss_handle, cudss_config, cudss_data,
-        cudss_handle_T, cudss_config_T, cudss_data_T,
-        sp_handle
+        cudss_handle_T, cudss_config_T, cudss_data_T
     );
 
     std::cout << "Solver initialization : attributes setted" << std::endl; 
@@ -175,7 +174,7 @@ bool CudaDualSimplex::callPrimalSolver()
 //----------------------------------------------------------------------------------------
 void CudaDualSimplex::initBetaWeights()
 {
-    ValuesVector beta(basis_size);
+    beta.resize(basis_size);
     for (int i = 0; i < basis_size; i++)
         beta[i] = 1;
 }
@@ -235,21 +234,27 @@ Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
     CudaDataDenseVector rhs(basis_size);
     CudaDataDenseVector alpha(non_basis_size);
     CudaDataDenseVector alpha_tmp(non_basis_size);
-    CudaDataDenseVector f_tmp(basis_size);
     CudaDataDenseVector f(basis_size);
     CudaDataDenseVector alpha_q(basis_size);
     CudaDataDenseVector tau(basis_size);
-
     CudaDataDenseVector new_eta_matrix(basis_size);
 
     IndexVector         inf_u_indexes;
     IndexVector         inf_l_indexes;
     IndexVector         inf_f_indexes;
-    std::cout << "111" << std::endl;
+
+    std::random_device              rd;
+    std::mt19937                    gen(rd());
+    std::uniform_int_distribution<> distrib(0, 1);
+    std::uniform_int_distribution<> non_basis_rand(0, non_basis_size);
+
+
     rhs.updateByPartialVec(problem->costs, basis_indexes);
     rhs.updateDeviceMem();
     solveLinSys(true, rhs, y);
-std::cout << "111" << std::endl;
+
+    problem->costs.updateDeviceMem();
+    non_basis_indexes.updateDeviceMem();
     problem->A.dotUpdate(
         sp_handle,
         y, problem->costs, 
@@ -258,10 +263,8 @@ std::cout << "111" << std::endl;
         SpmvOptions::UPDATE_T,
         true
     );
-    std::cout << "111" << std::endl;
-
     d.updateHostMem();
-    std::cout << "111" << std::endl;
+
     for (int i = 0; i < non_basis_size; i++)
     {
         int j = non_basis_indexes[i];
@@ -271,46 +274,33 @@ std::cout << "111" << std::endl;
         else if ((problem->bound_type[j] == BoundaryType::Lower || 
             problem->bound_type[j] == BoundaryType::Free) && d[j] < -EPS_D)
             inf_l_indexes.push_back(j);
-
-        if (problem->bound_type[j] == BoundaryType::Free && d[j] < -EPS_D)
-            inf_f_indexes.push_back(i);
     }
     
     obj_func_val = 0;
-    
-    for (auto i : inf_l_indexes)
-    {
-        obj_func_val += d[i];
-        problem->A.addSparseCol(columns_change, i, 1);
-    }
 
-    for (auto i : inf_u_indexes)
-    {
-        obj_func_val += d[i];
-        problem->A.addSparseCol(columns_change, i, -1);
-    }
+    for (auto i : inf_l_indexes) obj_func_val += d[i];
+    problem->A.addSparseCol(sp_handle, columns_change, inf_l_indexes, 1);
 
-    columns_change.updateDeviceMem();
+    for (auto i : inf_u_indexes) obj_func_val += d[i];
+    problem->A.addSparseCol(sp_handle, columns_change, inf_u_indexes, -1);
+
     solveLinSys(false, columns_change, f);
     f.updateHostMem();
 
     initBetaWeights();
-    std::cout << "111" << std::endl;
+
     int iteration = 0;
     int cycle_num = 0;
-
-    std::random_device              rd;
-    std::mt19937                    gen(rd());
-    std::uniform_int_distribution<> distrib(0, 1);
-    std::uniform_int_distribution<> non_basis_rand(0, non_basis_size);
 
     std::unordered_set<int> blocked_p;
     while (true)
     {
         iteration += 1;
+       
         if (!perturbed && cycle_num > MAX_CYCLE) 
         {
             perturbCosts();
+            problem->costs.updateDeviceMem();
 
             rhs.updateByPartialVec(problem->costs, basis_indexes);
             rhs.updateDeviceMem();
@@ -327,51 +317,64 @@ std::cout << "111" << std::endl;
             d.updateHostMem();
         }
 
-        // if (cycle_num > RESTART_CYCLE)
-        // {
-        //     status = Phase1OutStatus::NeedRestart;
-        //     break;
-        // }
-        
+        if (cycle_num > NEED_RESTART || 
+            obj_func_val > INF || std::isnan(obj_func_val))
+        {
+            status = Phase1OutStatus::NeedRestart;
+            break;
+        }
+
+        if (iteration % REFACT_FREQ == 0)
+        {
+            pfi_factor.resetPFI();
+            B.resetData(sp_handle, problem->A, basis_indexes);
+            B.LUdecompose(
+                cudss_handle, cudss_config, cudss_data,
+                cudss_handle, cudss_config, cudss_data
+            );
+        }
         
         // (Step 2) Pricing
-        int p, p_idx;
         double max_weight = 0;
-        bool no_candidates =true;
+        double weight_tmp;
+        bool candid_find = false;
+        int p, p_idx;
+
         for (int i = 0; i < basis_size; i++)
         {
             int j = basis_indexes[i];
-            if (((problem->bound_type[j] != BoundaryType::Free && problem->bound_type[j] != BoundaryType::Upper) && f[i] > EPS_BOUND) ||
-                ((problem->bound_type[j] != BoundaryType::Free && problem->bound_type[j] != BoundaryType::Lower) && f[i] < -EPS_BOUND))
+            if ((problem->bound_type[j] == BoundaryType::Lower && f[i] > EPS_BOUND) ||
+                (problem->bound_type[j] == BoundaryType::Upper && f[i] < -EPS_BOUND) ||
+                problem->bound_type[j] == BoundaryType::Boxed ||
+                problem->bound_type[j] == BoundaryType::Fixed)
             {
-                double weight_tmp = pow(f[i], 2) / beta[i];
+                weight_tmp = pow(f[i], 2) / beta[i];
+                candid_find = true;
                 if (weight_tmp > max_weight && blocked_p.find(j) == blocked_p.end())
                 {
-                    no_candidates = false;
                     p = j;
                     p_idx = i;
                     max_weight = weight_tmp;
                 }
             }
-            
         }
 
-        if (checkDualFeasible() || no_candidates)
+        if (!candid_find || !counterDualInfeasible())
         {
-            calcDualInfeasible();
-            if (obj_func_val == 0)
+            if (fabs(obj_func_val) < EPS_A || !counterDualInfeasible())
             {
                 status = Phase1OutStatus::Solved;
+                break;
             }
             else if (obj_func_val > 0)
             {
                 problem->solution.solved = false;
                 problem->solution.message = "dual infeasible";
                 status = Phase1OutStatus::DualInfeas;
+                break;
             }
-            break;
         }
-        
+
         // (Step 3) BTran
         rhs.initUnitVec(p_idx);
         rhs.updateDeviceMem();
@@ -389,33 +392,23 @@ std::cout << "111" << std::endl;
         alpha.updateHostMem();
        
         // (Step 5) Ratio Test
-        if (f[p_idx] > 0)
-        {
-            alpha_tmp = -alpha;
-            f_tmp = -f;
-        }
-        else
-        {
-            alpha_tmp = alpha;
-            f_tmp = f;
-        }
-        
-        IndexVector F, F_reserved;
+        if (f[p_idx] > 0) alpha.multiplyHostData(-1);
+        IndexVector F;
         for (int i = 0; i < non_basis_indexes.getSize(); i++)
         {
             int j = non_basis_indexes[i];
-            if (((d[j] >= 0 && alpha_tmp[i] > EPS_A) ||
-                (d[j] <= 0 && alpha_tmp[i] < -EPS_A)))
+            if (((d[j] >= 0 && alpha[i] > EPS_A) ||
+                (d[j] <= 0 && alpha[i] < -EPS_A)))
                 F.push_back(i);                
         }
 
         if (!F.size()) 
         {
             blocked_p.insert(p);
-            if (blocked_p.find(p) == blocked_p.end())
+            if (blocked_p.size() > RESTART_SIZE)
             {
                 status = Phase1OutStatus::NeedRestart;
-                break;
+                break; 
             }
             continue;
         }
@@ -423,13 +416,12 @@ std::cout << "111" << std::endl;
         if (blocked_p.size())
             blocked_p.clear();
         
-        int q_idx = F[0];
-        int q = non_basis_indexes[q_idx];;
-        double theta = d[q] / alpha_tmp[q_idx];
+        int q_idx, q;
+        double theta = INF;
         for (auto i : F)
         {   
             int j = non_basis_indexes[i];
-            double theta_tmp = d[j] / alpha_tmp[i];
+            double theta_tmp = d[j] / alpha[i];
             if (theta_tmp < theta || (fabs(theta_tmp - theta) < EPS_Z && distrib(gen) == 1)) 
             {
                 theta = theta_tmp;
@@ -438,7 +430,7 @@ std::cout << "111" << std::endl;
             } 
             else if (theta_tmp < theta + EPS_Z)
             {
-                if (fabs(alpha_tmp[i]) > fabs(alpha_tmp[q_idx]))
+                if (fabs(alpha[i]) > fabs(alpha[q_idx]))
                 {
                     theta = theta_tmp;
                     q = j;
@@ -446,25 +438,32 @@ std::cout << "111" << std::endl;
                 }
             }
         }
-        theta = d[q] / alpha[q_idx];
+
+        if (f[p_idx] > 0) alpha.multiplyHostData(-1);
+        theta = d[q] / alpha[q_idx]; 
         
         // (Step 6) FTran
-        problem->A.getColumn(q_idx, rhs);
-        rhs.updateDeviceMem();
+        rhs.updateHostMem();
+        rhs.show();
+        problem->A.show();
+        exit();
+        problem->A.getColumn(sp_handle, q, rhs);
+        rhs.updateHostMem();
+        rhs.show();
+        
         solveLinSys(false, rhs, alpha_q);
         alpha_q.updateHostMem();
-
-        if (iteration % REFACT_FREQ == 0)
-        {
-            pfi_factor.resetPFI();
-            B.LUdecompose(
-                cudss_handle, cudss_config, cudss_data,
-                cudss_handle, cudss_config, cudss_data,
-                sp_handle
-            );
-        }
+        alpha_q.show();
 
         // (Step 7) Basis change and update
+        double infisib_corr = 0;
+        if ((problem->bound_type[q] == BoundaryType::Upper || 
+            problem->bound_type[q] == BoundaryType::Free) && d[q] > EPS_D)  
+            infisib_corr = 1;
+        else if ((problem->bound_type[q] == BoundaryType::Lower || 
+            problem->bound_type[q] == BoundaryType::Free) && d[q] < -EPS_D) 
+            infisib_corr = -1;
+
         obj_func_val = obj_func_val - theta * f[p_idx];
         for (int i = 0; i < non_basis_indexes.getSize(); i++)
         {
@@ -474,39 +473,29 @@ std::cout << "111" << std::endl;
         d[p] = -theta;
         d[q] = 0;
         
-        
         solveLinSys(false, rho, tau);
         tau.updateHostMem();
-        // todo : оформить цикл в ядра 
+        // todo : оформить цикл в ядро
+        double theta_P = f[p_idx] / alpha_q[p_idx];
         for (int i = 0; i < basis_size; i++)
         {
             int j = basis_indexes[i];
-            f[i] = (i != p_idx) ? f[i] - alpha_q[i] / alpha_q[p_idx] * f[p_idx] : f[p_idx];
+            f[i] = (i != p_idx) ? f[i] - alpha_q[i] * theta_P : f[p_idx];
             new_eta_matrix[i] = (i != p_idx) ? -alpha_q[i] / alpha_q[p_idx] : 1 / alpha_q[p_idx]; 
             beta[i] = (i != p_idx) ? beta[i] - 2 * alpha_q[i] / alpha_q[p_idx] * tau[i]  + pow(alpha_q[i] / alpha_q[p_idx], 2) * beta[p_idx] : beta[i]; 
         }  
         beta[p_idx] = beta[p_idx] / pow(alpha_q[p_idx], 2);
-        f[p_idx] = f[p_idx] / alpha_q[p_idx];
+        f[p_idx] = f[p_idx] / alpha_q[p_idx] + infisib_corr;
         
-
         basis_indexes.update(p_idx, q);
         non_basis_indexes.update(q_idx, p);
-    
+
         pfi_factor.addEtaMatrix(p_idx, new_eta_matrix);
 
-        inf_f_indexes.clear();
-        for (int i = 0; i < non_basis_size; i++)
-        {
-            int j = non_basis_indexes[i];
-            if (problem->bound_type[j] == BoundaryType::Free && d[j] < 0)
-                inf_f_indexes.push_back(i);
-        }
-
-        calcDualInfeasible();
         cycle_num = (fabs(theta) < EPS_A) ? cycle_num + 1 : 0;
-        
+
         #ifdef DEBUG
-        std::cout << iteration << " : Z = "<< obj_func_val << " inf_num = " << counterDualInfeasible() << " p = " << p << " q = " << q << std::endl;  
+            std::cout << iteration << " : Z = "<< obj_func_val << " inf_num = " << counterDualInfeasible() << " p_info:" << p << " q_info:" << q << " f:" << f[p_idx] << " beta:" << beta[p_idx] << " alpha_q:" << alpha_q[p_idx]<< std::endl;  
         #endif
     }
     return status;
@@ -536,9 +525,9 @@ bool CudaDualSimplex::elaboratedMethod()
     CudaDataDenseVector column_change(basis_size);
     CudaDataDenseVector delta_xB(basis_size);
     CudaDataDenseVector new_eta_matrix(basis_size);
-        
-    IndexVector infeas_idx;
 
+    std::vector<double> difference_bounds = problem->upper_bound - problem->lower_bound;
+        
     std::random_device              rd;
     std::mt19937                    gen(rd());
     std::uniform_int_distribution<> distrib(0, 1);
@@ -729,7 +718,7 @@ bool CudaDualSimplex::elaboratedMethod()
         }
 
         // (Step 6) FTran
-        problem->A.getColumn(q_idx, rhs);
+        problem->A.getColumn(sp_handle, q_idx, rhs);
         rhs.updateDeviceMem();
         solveLinSys(false, rhs, alpha_q);
         alpha_q.updateHostMem();
@@ -738,6 +727,7 @@ bool CudaDualSimplex::elaboratedMethod()
 
         // Update d accoprding to BRFT
         double delta_z = 0;
+        IndexVector infeas_idx;
 
         for (int i = 0; i < non_basis_indexes.getSize(); i++)
         {
@@ -749,17 +739,17 @@ bool CudaDualSimplex::elaboratedMethod()
                 if (x[j] == problem->lower_bound[j] && d[j] < 0)
                 {
                     infeas_idx.push_back(j);
-                    problem->A.addSparseCol(column_change, j, (problem->upper_bound[j] - problem->lower_bound[j])); 
                     delta_z += problem->costs[j] * (problem->upper_bound[j] - problem->lower_bound[j]);
                 }  
                 else if (x[j] == problem->upper_bound[j] && d[j] > 0)
                 {
                     infeas_idx.push_back(j);
-                    problem->A.addSparseCol(column_change, j, (problem->lower_bound[j] - problem->upper_bound[j])); 
                     delta_z -= problem->costs[j] * (problem->upper_bound[j] - problem->lower_bound[j]);
                 }   
             }          
         }
+
+        problem->A.addSparseCol(sp_handle, column_change, infeas_idx, difference_bounds); 
         d[p] = -theta;
         d[q] = 0;
 

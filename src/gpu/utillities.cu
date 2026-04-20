@@ -86,8 +86,8 @@ cublasStatus_t betaWeightsUpdateLauncher(
 cusparseStatus_t spmvUpdateInc(
     cusparseHandle_t handle,
     int nnz,
-    int minor_dim,
-    int major_dim,
+    int m,
+    int n,
     int target_cols_size,
     double* sol,    
     const double* vec1,  
@@ -98,10 +98,11 @@ cusparseStatus_t spmvUpdateInc(
     const int* target_cols,
     const double alpha,
     const double beta,
-    const bool set
+    const bool set,
+    const bool transpose
 )
 {
-    if (minor_dim <= 0 || major_dim <= 0 || nnz <= 0) return CUSPARSE_STATUS_SUCCESS;
+    if (m <= 0 || n <= 0 || nnz <= 0) return CUSPARSE_STATUS_SUCCESS;
     if (!vec1 || !vec2) return CUSPARSE_STATUS_INVALID_VALUE;
 
     cudaStream_t stream = utilCusparseGetStreamFromHandle(handle);
@@ -116,27 +117,41 @@ cusparseStatus_t spmvUpdateInc(
     double* buff = nullptr;
 
     CUDA_CALL_AND_CHECK(
-        cudaMalloc(&buff, minor_dim*sizeof(double)),
+        cudaMalloc(&buff, n*sizeof(double)),
         "cudaMalloc"
     );
 
     CUDA_CALL_AND_CHECK(
-        cudaMemset(buff, 0, minor_dim*sizeof(double)),
+        cudaMemset(buff, 0, n*sizeof(double)),
         "cudaMemset"
     );
 
     int block_size = (prop.major >= 7) ? 256 : 128;
-    int grid_size = (major_dim + block_size - 1) / block_size;
+    int grid_size = (m + block_size - 1) / block_size;
     int max_blocks = prop.maxGridSize[0];
     if (grid_size > max_blocks) grid_size = max_blocks;
 
-    spmvUpdateKernel<<<grid_size, block_size, 0, stream>>>(
-        sol, vec1, vec2, 
-        csr_val, col_ids, row_ptrs, 
-        target_cols, buff, 
-        target_cols_size, nnz, major_dim, 
-        alpha, beta, set
-    );
+    if (transpose)
+    {
+        spmvUpdateTKernel<<<grid_size, block_size, 0, stream>>>(
+            sol, vec1, vec2, 
+            csr_val, col_ids, row_ptrs, 
+            target_cols, buff, 
+            target_cols_size, nnz, n, 
+            alpha, beta, set
+        );
+    }
+    else
+    {
+        spmvUpdateKernel<<<grid_size, block_size, 0, stream>>>(
+            sol, vec1, vec2, 
+            csr_val, col_ids, row_ptrs, 
+            target_cols, buff, 
+            target_cols_size, nnz, m, 
+            alpha, beta, set
+        );
+    }
+    
     
     cudaDeviceSynchronize();
 
@@ -145,6 +160,94 @@ cusparseStatus_t spmvUpdateInc(
         "cudaFree"
     );
     
+    cudaError_t cuda_err = cudaGetLastError();
+    if (cuda_err != cudaSuccess) {
+        return CUSPARSE_STATUS_EXECUTION_FAILED;
+    }
+    
+    return CUSPARSE_STATUS_SUCCESS;
+}
+
+
+
+cusparseStatus_t getColFromSp(
+    cusparseHandle_t handle,
+    int m,
+    int n,
+    int p,
+    double* vec,    
+    const double* csc_val,
+    const int* col_ids,
+    const int* row_ptrs
+)
+{
+    if (m <= 0 || n <= p) return CUSPARSE_STATUS_SUCCESS;
+    if (!vec) return CUSPARSE_STATUS_INVALID_VALUE;
+
+    cudaStream_t stream = utilCusparseGetStreamFromHandle(handle);
+    cusparsePointerMode_t pointer_mode = utilCusparseGetPointerMode(handle);
+
+    int device;
+    cudaGetDevice(&device);
+
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, device);
+
+    int block_size = (prop.major >= 7) ? 256 : 128;
+    int grid_size = (m + block_size - 1) / block_size;
+    int max_blocks = prop.maxGridSize[0];
+    if (grid_size > max_blocks) grid_size = max_blocks;
+
+    getColFromSpKernel<<<grid_size, block_size, 0, stream>>>(
+        vec, csc_val, col_ids, row_ptrs, p
+    );
+       
+    cudaDeviceSynchronize();
+
+    cudaError_t cuda_err = cudaGetLastError();
+    if (cuda_err != cudaSuccess) {
+        return CUSPARSE_STATUS_EXECUTION_FAILED;
+    }
+    
+    return CUSPARSE_STATUS_SUCCESS;
+}
+
+
+cusparseStatus_t addSpColsToVec(
+    cusparseHandle_t handle,
+    int m,
+    int n,
+    int p,
+    double* vec,    
+    const double* csc_val,
+    const int* col_ids,
+    const int* row_ptrs,
+    const double alpha
+)
+{
+    if (m <= 0 || n <= p) return CUSPARSE_STATUS_SUCCESS;
+    if (!vec) return CUSPARSE_STATUS_INVALID_VALUE;
+
+    cudaStream_t stream = utilCusparseGetStreamFromHandle(handle);
+    cusparsePointerMode_t pointer_mode = utilCusparseGetPointerMode(handle);
+
+    int device;
+    cudaGetDevice(&device);
+
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, device);
+
+    int block_size = (prop.major >= 7) ? 256 : 128;
+    int grid_size = (m + block_size - 1) / block_size;
+    int max_blocks = prop.maxGridSize[0];
+    if (grid_size > max_blocks) grid_size = max_blocks;
+
+    addSpColsToVecKernel<<<grid_size, block_size, 0, stream>>>(
+        vec, csc_val, col_ids, row_ptrs, p, alpha
+    );
+       
+    cudaDeviceSynchronize();
+
     cudaError_t cuda_err = cudaGetLastError();
     if (cuda_err != cudaSuccess) {
         return CUSPARSE_STATUS_EXECUTION_FAILED;
@@ -177,28 +280,63 @@ cublasStatus_t btranOrFtran(
     cudaDeviceProp prop;
     cudaGetDeviceProperties(&prop, device);
 
-    if (transpose)
+    int block_size = (prop.major >= 7) ? 256 : 128;
+    int grid_size = (col_len + block_size - 1) / block_size;
+    int max_blocks = prop.maxGridSize[0];
+    int sharedMemSize = block_size * sizeof(double);
+    if (grid_size > max_blocks) grid_size = max_blocks;
+
+    double* buff = nullptr; 
+    CUDA_CALL_AND_CHECK(
+        cudaMalloc(&buff, col_len*sizeof(double)),
+        "cudaMalloc for buff"
+    );
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            buff, 
+            x, 
+            col_len*sizeof(double), 
+            cudaMemcpyDeviceToDevice),
+        "cudaMemcpy for buff"
+    );   
+
+    for (int i = 0; i < size; i++)
     {
-        applyPFITKernel<<<1, 1, 0, stream>>>(    
-            y, x,
-            device_values,
-            device_col_id,
-            size, col_len
-        );
+        if (transpose)
+        {
+            applyEtaMatTKernel<<<grid_size, block_size, sharedMemSize, stream>>>(    
+                y, buff,
+                device_values,
+                device_col_id,
+                size - i - 1, col_len
+            );
+        }
+        else
+        {
+            applyEtaMatKernel<<<grid_size, block_size, 0, stream>>>(    
+                y, buff,
+                device_values,
+                device_col_id,
+                i, col_len
+            );
+        }
         cudaDeviceSynchronize();
-    }
-    else
-    {
-         applyPFIKernel<<<1, 1, 0, stream>>>(    
-            y, x,
-            device_values,
-            device_col_id,
-            size, col_len
-        );
-cudaDeviceSynchronize();
+        CUDA_CALL_AND_CHECK(
+            cudaMemcpy(
+                buff, 
+                y, 
+                col_len*sizeof(double), 
+                cudaMemcpyDeviceToDevice),
+            "cudaMemcpy for buff"
+        );   
     }
     
-    
+    CUDA_CALL_AND_CHECK(
+        cudaFree(buff),
+        "cudaFree"
+    );
+    // if (size == 1) exit(0);
+
     cudaError_t cuda_err = cudaGetLastError();
     if (cuda_err != cudaSuccess) {
         return CUBLAS_STATUS_EXECUTION_FAILED;

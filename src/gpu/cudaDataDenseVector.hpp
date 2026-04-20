@@ -70,6 +70,7 @@ public:
     void initUnitVec(const int p);
     void deleteVals(std::set<int> idxs);
     void resize(const int& new_size);
+    void multiplyHostData(const double& alpha);
 
     double* getHostValues() {return host_values;};
 
@@ -81,6 +82,8 @@ public:
     
     CudaDataDenseVector& operator=(const CudaDataDenseVector& values_vector);
     CudaDataDenseVector& operator-();
+
+    std::vector<double>& operator-(const CudaDataDenseVector& values_vector);
 
     int countNonZero() const;
 

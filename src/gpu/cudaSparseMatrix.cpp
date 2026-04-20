@@ -339,7 +339,7 @@ void CudaSparseMatrix::dotUpdate(
             CUSP_CALL_AND_CHECK(
                 spmvUpdateInc(
                     handle,
-                    non_zero, n, m,
+                    non_zero, m, n,
                     col_idx.getSize(),
                     sol.device_values,
                     vec1.device_values,
@@ -350,7 +350,8 @@ void CudaSparseMatrix::dotUpdate(
                     col_idx.device_values,
                     alpha,
                     beta,
-                    set
+                    set,
+                    false
                 ), "cusparseSpMV"
             );
             break;
@@ -370,7 +371,8 @@ void CudaSparseMatrix::dotUpdate(
                     col_idx.device_values,
                     alpha,
                     beta,
-                    set
+                    set,
+                    true
                 ), "cusparseSpMV"
             );
             break;
@@ -382,7 +384,7 @@ void CudaSparseMatrix::dotUpdate(
 }
 
 
-void CudaSparseMatrix::getColumn(const int p, CudaDataDenseVector& rhs) const
+void CudaSparseMatrix::getColumn(cusparseHandle_t& handle, const int p, CudaDataDenseVector& rhs) const
 {
     if (m != rhs.getSize())
     {
@@ -390,53 +392,12 @@ void CudaSparseMatrix::getColumn(const int p, CudaDataDenseVector& rhs) const
         exit(1);
     }
 
-    double* buff_res = nullptr;
-    double* buff_val = nullptr;
-    int* buff_rows   = nullptr;
-
-    int col_size = device_ptr_csc[p + 1] - device_ptr_csc[p];
-
     CUDA_CALL_AND_CHECK(
-        cudaMallocHost(&buff_res, n*sizeof(double)),
-        "cudaMallocHost : buff_res"
-    );
-    CUDA_CALL_AND_CHECK(
-        cudaMemset(buff_res, 0, n*sizeof(double)),
-        "cudaMemset : buff_res"
+        cudaMemset(rhs.device_values, 0, rhs.getSize()*sizeof(double)),
+        "cudaMemset"
     );
 
-    CUDA_CALL_AND_CHECK(
-        cudaMallocHost(&buff_val, col_size*sizeof(double)),
-        "cudaMallocHost : buff_val"
-    );
-    CUDA_CALL_AND_CHECK(
-        cudaMallocHost(&buff_rows, col_size*sizeof(int)),
-        "cudaMallocHost : buff_rows"
-    );
-
-    CUDA_CALL_AND_CHECK(
-        cudaMemcpy(
-            device_values_csc + device_ptr_csc[p], buff_val, 
-            col_size * sizeof(int), cudaMemcpyDeviceToHost), 
-        "cudaMemcpy : buff_val"
-    );
-    CUDA_CALL_AND_CHECK(
-        cudaMemcpy(
-            device_id_csc + device_ptr_csc[p], buff_rows, 
-            col_size * sizeof(int), cudaMemcpyDeviceToHost), 
-        "cudaMemcpy : buff_rows"
-    );
-
-    rhs.updateVecBySparse(buff_rows, buff_val, col_size);
-
-    CUDA_CALL_AND_CHECK(
-        cudaFreeHost(buff_rows),
-        "cudaFree : buff_rows"
-    );
-    CUDA_CALL_AND_CHECK(
-        cudaFreeHost(buff_val),
-        "cudaFree : buff_val"
-    );    
+    getColFromSp(handle, m, n, p, rhs.device_values, device_values_csc, device_id_csc, device_ptr_csc);
 }
 
 
@@ -499,8 +460,7 @@ void CudaSparseMatrix::LUdecompose(
     cudssData_t& data,
     cudssHandle_t& handle_T, 
     cudssConfig_t& config_T, 
-    cudssData_t& data_T,
-    cusparseHandle_t& sp_handle
+    cudssData_t& data_T
 )
 {
     cudssMatrix_t x, rhs; // у функции cudssExecute универсальная сигнатура для всех операций, это просто заглушки
@@ -964,15 +924,42 @@ int CudaSparseMatrix::calcNonzeroInColumn(const int& p) const
 }
 
 
-void CudaSparseMatrix::addSparseCol(CudaDataDenseVector& vec, const int p, const double alpha)
+void CudaSparseMatrix::addSparseCol(
+    cusparseHandle_t& handle, CudaDataDenseVector& vec, 
+    const IndexVector& cols, const std::vector<double>& alpha
+)
 {
-    CudaDataDenseVector buff(vec.getSize()); 
-    getColumn(p, buff);
+    if (m != vec.getSize())
+    {
+        throw "Incorrect size";
+        exit(1);
+    }
 
-    for (int i = 0; i < vec.getSize(); i++)
-        vec.host_values[i] += alpha * buff[i];
+    for (const auto& i : cols)
+    {
+        addSpColsToVec(handle, m, n, i, vec.device_values, device_values_csc, device_id_csc, device_ptr_csc, alpha[i]);
+    }
+}
+
+
+void CudaSparseMatrix::addSparseCol(
+    cusparseHandle_t& handle, CudaDataDenseVector& vec, 
+    const IndexVector& cols, const double& alpha
+)
+{
+    if (m != vec.getSize())
+    {
+        throw "Incorrect size";
+        exit(1);
+    }
+
+    for (const auto& i : cols)
+    {
+        addSpColsToVec(handle, m, n, i, vec.device_values, device_values_csc, device_id_csc, device_ptr_csc, alpha);
+    }
 }
  
+
 // debug 
 void CudaSparseMatrix::show()
 {

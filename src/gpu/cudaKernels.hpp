@@ -32,7 +32,45 @@ __global__ void betaWeightsUpdateKernelOpt(
 );
 
 
+__global__ void addSpColsToVecKernel(    
+    double* vec,
+    const double* val_csc,
+    const int* id_csc,
+    const int* ptr_csc,
+    const int col_idx,
+    const double alpha
+);
+
+
+
+__global__ void getColFromSpKernel(    
+    double* vec,
+    const double* val_csc,
+    const int* id_csc,
+    const int* ptr_csc,
+    const int col_idx
+);
+
+
 __global__ void spmvUpdateKernel(    
+    double* sol,
+    const double* vec1,
+    const double* vec2,
+    const double* val_csr,
+    const int* id_csr,
+    const int* ptr_csr,
+    const int* cols_idx,
+    double* buff,
+    const int cols_idx_size,
+    const int nnz,
+    const int major_dim,
+    const double alpha,
+    const double beta,
+    const bool set
+);
+
+
+__global__ void spmvUpdateTKernel(    
     double* sol,
     const double* vec1,
     const double* vec2,
@@ -60,16 +98,6 @@ __global__ void applyEtaMatKernel(
 );
 
 
-__global__ void applyPFIKernel(    
-    double *y,
-    const double *x,
-    const double *device_values,
-    const int *device_col_id,
-    const int size,
-    const int col_len
-);
-
-
 __global__ void applyEtaMatTKernel(   
     double *y, 
     const double *x,
@@ -79,12 +107,3 @@ __global__ void applyEtaMatTKernel(
     const int col_len
 );
 
-
-__global__ void applyPFITKernel(    
-    double *y,
-    const double *x,
-    const double *device_values,
-    const int *device_col_id,
-    const int size,
-    const int col_len
-);

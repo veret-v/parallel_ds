@@ -39,10 +39,10 @@ PFIfactor::~PFIfactor()
 
 void PFIfactor::addEtaMatrix(const int q, CudaDataDenseVector vals)
 {
-    int* buff_q;
+    int* buff_q = nullptr;
     
     CUDA_CALL_AND_CHECK(
-        cudaMalloc(&buff_q, sizeof(int)),
+        cudaMallocHost(&buff_q, sizeof(int)),
         "cudaMalloc : device_values"
     );
 
@@ -66,7 +66,7 @@ void PFIfactor::addEtaMatrix(const int q, CudaDataDenseVector vals)
         "cudaMemcpy : buff_q"
     );
 
-    CUDA_CALL_AND_CHECK(cudaFree(buff_q),
+    CUDA_CALL_AND_CHECK(cudaFreeHost(buff_q),
                         "cudaFree : buff_q");
 
     size += 1;
