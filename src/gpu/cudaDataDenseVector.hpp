@@ -67,6 +67,7 @@ public:
 
     void updateVecBySparse(const int* crc_id, const double* crc_val, int nnz);
     void updateByPartialVec(const CudaDataDenseVector& values_vector, CudaIndexVector& indexes);
+    void setValues(const CudaDataDenseVector& values_vector, CudaIndexVector& indexes);
     void initUnitVec(const int p);
     void deleteVals(std::set<int> idxs);
     void resize(const int& new_size);
@@ -83,7 +84,7 @@ public:
     CudaDataDenseVector& operator=(const CudaDataDenseVector& values_vector);
     CudaDataDenseVector& operator-();
 
-    std::vector<double>& operator-(const CudaDataDenseVector& values_vector);
+    std::vector<double> operator-(const CudaDataDenseVector& values_vector);
 
     int countNonZero() const;
 

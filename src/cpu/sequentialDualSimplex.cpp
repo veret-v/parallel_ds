@@ -10,7 +10,7 @@ void SequentialDualSimplex::initDualSimplex()
 
     x = ValuesVector(full_size);
     d = ValuesVector(full_size);    
-    B = problem->A(basis_indexes);
+    B.resetData(problem->A, basis_indexes);
     B_eta_repr.clear();
     B.LUdecompose();
 
@@ -245,7 +245,7 @@ Phase1OutStatus SequentialDualSimplex::minimizeDualInfeasibility()
 
     for (auto i : inf_u_indexes)
     {
-        obj_func_val += d[i];
+        obj_func_val -= d[i];
         columns_change -= problem->A(i);
     }
 
@@ -286,7 +286,6 @@ Phase1OutStatus SequentialDualSimplex::minimizeDualInfeasibility()
         double weight_tmp;
         bool candid_find = false;
         int p, p_idx;
-
         for (int i = 0; i < basis_size; i++)
         {
             int j = basis_indexes[i];
@@ -349,16 +348,57 @@ Phase1OutStatus SequentialDualSimplex::minimizeDualInfeasibility()
                 F.push_back(i);                
         }
 
+
+        // rty to save
         if (!F.size()) 
         {
             blocked_p.insert(p);
-            if (blocked_p.size() > RESTART_SIZE)
+
+            B_eta_repr.clear();
+            B.resetData(problem->A, basis_indexes);
+            B.LUdecompose();
+
+            solveLinSys(problem->costs(basis_indexes), y, true);
+            problem->A.dotUpdate(
+                y, problem->costs, 
+                d, -1, 1, 
+                non_basis_indexes, 
+                SpmvOptions::UPDATE_T,
+                true
+            );
+
+            inf_u_indexes.clear();
+            inf_l_indexes.clear();
+            for (int i = 0; i < non_basis_size; i++)
             {
-                status = Phase1OutStatus::NeedRestart;
-                break; 
+                int j = non_basis_indexes[i];
+                if ((problem->bound_type[j] == BoundaryType::Upper || 
+                    problem->bound_type[j] == BoundaryType::Free) && d[j] > EPS_D)
+                    inf_u_indexes.push_back(j);
+                else if ((problem->bound_type[j] == BoundaryType::Lower || 
+                    problem->bound_type[j] == BoundaryType::Free) && d[j] < -EPS_D)
+                    inf_l_indexes.push_back(j);
             }
+
+            obj_func_val = 0;
+            for (auto i : inf_l_indexes)
+            {
+                obj_func_val += d[i];
+                columns_change += problem->A(i);
+            }
+
+            for (auto i : inf_u_indexes)
+            {
+                obj_func_val -= d[i];
+                columns_change -= problem->A(i);
+            }
+
+            solveLinSys(columns_change, f, false);
+
             continue;
         }
+        // end trying
+
 
         if (blocked_p.size())
             blocked_p.clear();
@@ -369,13 +409,13 @@ Phase1OutStatus SequentialDualSimplex::minimizeDualInfeasibility()
         {   
             int j = non_basis_indexes[i];
             double theta_tmp = d[j] / alpha_tmp[i];
-            if (theta_tmp < theta || (fabs(theta_tmp - theta) < EPS_Z && distrib(gen) == 1)) 
+            if (theta_tmp < theta) 
             {
                 theta = theta_tmp;
                 q = j;
                 q_idx = i;
             } 
-            else if (theta_tmp < theta + EPS_Z)
+            else if (fabs(theta_tmp - theta) < EPS_Z)
             {
                 if (fabs(alpha_tmp[i]) > fabs(alpha_tmp[q_idx]))
                 {
@@ -389,11 +429,8 @@ Phase1OutStatus SequentialDualSimplex::minimizeDualInfeasibility()
         
         // (Step 6) FTran
         buff = problem->A(q);
-        buff.show();
-        problem->A.show();
         solveLinSys(buff, alpha_q, false);
-        alpha_q.show();
-        
+
         // (Step 7) Basis change and update
         double infisib_corr = 0;
         if ((problem->bound_type[q] == BoundaryType::Upper || 
@@ -474,8 +511,10 @@ bool SequentialDualSimplex::elaboratedMethod()
         SpmvOptions::UPDATE,
         true
     );
+
     solveLinSys(problem->RHS, buff_sol, false);
     x.setValues(buff_sol, basis_indexes);
+
     initReducedCosts(y);
     obj_func_val = problem->costs.dot(x);
     beta = initBetaWeights();
@@ -583,7 +622,7 @@ bool SequentialDualSimplex::elaboratedMethod()
         }
 
         int q_idx, q;
-        double theta;
+        double theta = INF;
         while (F.size() && delta >= 0)
         {
             int it = 0;
@@ -695,7 +734,7 @@ bool SequentialDualSimplex::elaboratedMethod()
         obj_func_val += theta * delta;
 
         #ifdef DEBUG
-            std::cout << iteration << " : Z = "<< obj_func_val  << " delta_z = " << delta_z << std::endl;
+            std::cout << iteration << " : Z = "<< obj_func_val  << " delta_z = " << delta << " p_info:" << p << " q_info:" << q  << std::endl;
         #endif
 
         if (fabs(theta) < EPS_A) cycle_num += 1;

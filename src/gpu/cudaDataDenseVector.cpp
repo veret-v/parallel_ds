@@ -210,6 +210,15 @@ void CudaDataDenseVector::createDescr()
         host_values[i] = values_vector.host_values[indexes[i]];
 }
 
+void CudaDataDenseVector::setValues(
+    const CudaDataDenseVector& values_vector, 
+    CudaIndexVector& indexes
+)
+{
+    for (int i = 0; i < indexes.getSize(); i++)
+        host_values[indexes[i]] = values_vector.host_values[i];
+}
+
 
 void CudaDataDenseVector::initUnitVec(const int p)
 {
@@ -238,7 +247,7 @@ CudaDataDenseVector& CudaDataDenseVector::operator-()
 }
 
 
-std::vector<double>& CudaDataDenseVector::operator-(const CudaDataDenseVector& values_vector)
+std::vector<double> CudaDataDenseVector::operator-(const CudaDataDenseVector& values_vector)
 {
     if (values_vector.getSize() != size)
     {
@@ -251,7 +260,7 @@ std::vector<double>& CudaDataDenseVector::operator-(const CudaDataDenseVector& v
     {
         new_vec[i] = host_values[i] - values_vector.host_values[i];
     }
-    
+
     return new_vec;
 }
 

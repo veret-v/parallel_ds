@@ -240,7 +240,6 @@ __global__ void applyEtaMatTKernel(
     sdata[tid] = sum;
     __syncthreads();
 
-    // Редукция внутри блока (суммирование)
     for (int s = blockDim.x / 2; s > 0; s >>= 1) {
         if (tid < s) {
             sdata[tid] += sdata[tid + s];
@@ -250,7 +249,7 @@ __global__ void applyEtaMatTKernel(
 
     if (tid == 0) {
         // printf("Debug: result id=%d val=%f\n", tid, sdata[0]);
-        atomicAdd(&y[device_col_id[eta_num]], sdata[0]);
+        atomicAdd(y, sdata[0]);
     }
 }
 

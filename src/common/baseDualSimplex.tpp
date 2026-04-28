@@ -177,7 +177,6 @@ void BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::solve(const std::
             std::cout << "-- Correction in primal feasible and dual infeasible case done" << std::endl;
         }
         std::cout << "-- Solution obtained" << std::endl;
-
         problem->solution.x = x;
         problem->solution.Z += obj_func_val;
 

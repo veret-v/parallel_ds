@@ -84,6 +84,7 @@ public:
     ~CudaSparseMatrix();
 
     void genCsc(cusparseHandle_t& handle);
+    void genCsr(cusparseHandle_t& handle);
     void createDescr();
 
     int calcNonzeroInColumn(const int& p) const;

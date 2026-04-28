@@ -61,7 +61,7 @@ protected:
 public:
     CudaDualSimplex(Problem<CudaSparseMatrix, CudaDataDenseVector>& _problem) : 
         BaseDualSimplex<CudaSparseMatrix, CudaDataDenseVector, CudaIndexVector>(_problem),
-        pfi_factor(_problem.constraints_size, REFACT_FREQ + 1)
+        pfi_factor(_problem.constraints_size, REFACT_FREQ + 5)
     {};
     using BaseDualSimplex::BaseDualSimplex;
     ~CudaDualSimplex();

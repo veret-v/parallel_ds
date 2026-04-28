@@ -83,6 +83,7 @@ ValuesVector& ValuesVector::operator=(const ValuesVector& values_vector)
         {
             double* start_ptr = values_vector.getHostValues();
             data.assign(start_ptr, start_ptr + values_vector.getSize());
+            return *this;
         }
 #endif
 

@@ -21,7 +21,6 @@
 #include "../common/types.hpp"
 
 #define SING_EPS     1e-12
-#define REFACT_FREQ  200
 
 class PFIfactor
 {
@@ -40,12 +39,12 @@ public:
     PFIfactor(const int col_len, const int capacity);
     ~PFIfactor();
 
-    void addEtaMatrix(const int q, CudaDataDenseVector vals);
+    void addEtaMatrix(const int q, CudaDataDenseVector& vals);
     void applyPFI(
-        const cublasHandle_t handle, 
-        const CudaDataDenseVector rhs, 
-        CudaDataDenseVector sol, 
-        const bool transpose
+        const cublasHandle_t& handle, 
+        const CudaDataDenseVector& rhs, 
+        CudaDataDenseVector& sol, 
+        const bool& transpose
     );
     void resetPFI() {size = 0;};
 

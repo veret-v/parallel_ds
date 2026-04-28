@@ -286,11 +286,18 @@ cublasStatus_t btranOrFtran(
     int sharedMemSize = block_size * sizeof(double);
     if (grid_size > max_blocks) grid_size = max_blocks;
 
-    double* buff = nullptr; 
+    double* buff     = nullptr; 
+    double* buff_res = nullptr; 
+    
     CUDA_CALL_AND_CHECK(
         cudaMalloc(&buff, col_len*sizeof(double)),
         "cudaMalloc for buff"
     );
+    CUDA_CALL_AND_CHECK(
+        cudaMalloc(&buff_res, sizeof(double)),
+        "cudaMalloc for buff_res"
+    );
+
     CUDA_CALL_AND_CHECK(
         cudaMemcpy(
             buff, 
@@ -299,16 +306,54 @@ cublasStatus_t btranOrFtran(
             cudaMemcpyDeviceToDevice),
         "cudaMemcpy for buff"
     );   
+    CUDA_CALL_AND_CHECK(
+        cudaMemset(buff_res, 0, sizeof(double)),
+        "cudaMemset"
+    );
 
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            y, 
+            x, 
+            col_len*sizeof(double), 
+            cudaMemcpyDeviceToDevice),
+        "cudaMemcpy for y"
+    );   
+  
     for (int i = 0; i < size; i++)
     {
         if (transpose)
         {
             applyEtaMatTKernel<<<grid_size, block_size, sharedMemSize, stream>>>(    
-                y, buff,
+                buff_res, buff,
                 device_values,
                 device_col_id,
                 size - i - 1, col_len
+            );  
+            cudaDeviceSynchronize();
+
+            int col_num;
+            CUDA_CALL_AND_CHECK(
+                cudaMemcpy(
+                    &col_num, 
+                    device_col_id + size - i - 1, 
+                    sizeof(int), 
+                    cudaMemcpyDeviceToHost),
+                "cudaMemcpy for col_num"
+            ); 
+
+            CUDA_CALL_AND_CHECK(
+                cudaMemcpy(
+                    y + col_num, 
+                    buff_res, 
+                    sizeof(double), 
+                    cudaMemcpyDeviceToDevice),
+                "cudaMemcpy for y"
+            );   
+
+            CUDA_CALL_AND_CHECK(
+                cudaMemset(buff_res, 0, sizeof(double)),
+                "cudaMemset"
             );
         }
         else
@@ -319,8 +364,9 @@ cublasStatus_t btranOrFtran(
                 device_col_id,
                 i, col_len
             );
+            cudaDeviceSynchronize();
         }
-        cudaDeviceSynchronize();
+
         CUDA_CALL_AND_CHECK(
             cudaMemcpy(
                 buff, 
@@ -333,6 +379,10 @@ cublasStatus_t btranOrFtran(
     
     CUDA_CALL_AND_CHECK(
         cudaFree(buff),
+        "cudaFree"
+    );
+    CUDA_CALL_AND_CHECK(
+        cudaFree(buff_res),
         "cudaFree"
     );
     // if (size == 1) exit(0);

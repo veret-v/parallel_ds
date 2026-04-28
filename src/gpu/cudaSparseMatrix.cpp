@@ -454,6 +454,51 @@ void CudaSparseMatrix::genCsc(cusparseHandle_t& handle)
 }
 
 
+void CudaSparseMatrix::genCsr(cusparseHandle_t& handle)
+{
+    size_t bufferSize = 0;
+    void* d_buffer = nullptr;
+
+    CUSP_CALL_AND_CHECK(
+        cusparseCsr2cscEx2_bufferSize(
+            handle,
+            n, m, non_zero,
+            device_values_csc, device_ptr_csc, device_id_csc,
+            device_values_csr, device_ptr_csr, device_id_csr, 
+            CUDA_R_64F,
+            CUSPARSE_ACTION_NUMERIC,
+            CUSPARSE_INDEX_BASE_ZERO,
+            CUSPARSE_CSR2CSC_ALG1,
+            &bufferSize
+        ), "cusparseCsr2cscEx2_bufferSize"
+    );
+    
+    CUDA_CALL_AND_CHECK(
+        cudaMalloc(&d_buffer, bufferSize),
+        "cudaMalloc for d_buffer"
+    );
+    
+    CUSP_CALL_AND_CHECK(
+        cusparseCsr2cscEx2(
+            handle,
+            n, m, non_zero,
+            device_values_csc, device_ptr_csc, device_id_csc,
+            device_values_csr, device_ptr_csr, device_id_csr, 
+            CUDA_R_64F,
+            CUSPARSE_ACTION_NUMERIC,
+            CUSPARSE_INDEX_BASE_ZERO,
+            CUSPARSE_CSR2CSC_ALG1,
+            d_buffer
+        ), "cusparseCsr2cscEx2_bufferSize"
+    );
+
+    CUDA_CALL_AND_CHECK(
+        cudaFree(d_buffer),
+        "cudaFree for d_buffer"
+    );
+}
+
+
 void CudaSparseMatrix::LUdecompose(
     cudssHandle_t& handle, 
     cudssConfig_t& config, 
@@ -838,45 +883,69 @@ void CudaSparseMatrix::resetData(
     const CudaIndexVector& indexes
 )
 {
-    std::vector<double> new_elem_csr;
-    std::vector<int> new_row_ptr;
-    std::vector<int> new_col_id;
+    std::vector<std::pair<int, int>> ranges(indexes.getSize());
+    int new_size = 0;
 
-    std::vector<double> elem_csr(non_zero);
-    std::vector<int> row_ptr(m + 1);
-    std::vector<int> col_id(non_zero);
+    if (memory_init) 
+        freeMemory();
 
-    copyCsrToHost(elem_csr, row_ptr, col_id);
+    if (descr_exist) 
+        destroyDesr();
 
-    Matrix buff_matrix(elem_csr, row_ptr, col_id, m, n);
-
-    int row_start_ptr = 0;
-    new_row_ptr.push_back(row_start_ptr);
-
-    n = indexes.getSize();
-    m = matrix.m;
-    
-    for (int i = 0; i < m; i++)
+    for (size_t i = 0; i < indexes.getSize(); i++)
     {
-        for (int j = 0; j < indexes.getSize(); j++)
-        {
-            int indx = indexes[j];
-            double val = buff_matrix(i, indx);
-            if (fabs(val) > EPS_ZERO)
-            {
-                new_elem_csr.push_back(val);
-                new_col_id.push_back(j);
-                row_start_ptr += 1;
-            }
-        }
-        new_row_ptr.push_back(row_start_ptr);
+        CUDA_CALL_AND_CHECK(
+            cudaMemcpy(
+                &ranges[i].first, matrix.device_ptr_csc + indexes[i], 
+                sizeof(int), cudaMemcpyDeviceToHost),
+            "cudaMemcpy"
+        );
+        CUDA_CALL_AND_CHECK(
+            cudaMemcpy(
+                &ranges[i].second, matrix.device_ptr_csc + indexes[i] + 1, 
+                sizeof(int), cudaMemcpyDeviceToHost),
+            "cudaMemcpy"
+        );
+        new_size += ranges[i].second - ranges[i].first;
     }
-    
-    elem_csr = new_elem_csr;
-    col_id = new_col_id;
-    row_ptr = new_row_ptr;
 
-    updateDataByHost(handle, buff_matrix.getElem(), buff_matrix.getColPtrs(), buff_matrix.getRowIds());
+    allocateMemory(new_size, m, n);
+    non_zero = new_size;
+
+    int curr_size = 0;
+
+    for (size_t i = 0; i < indexes.getSize(); i++)
+    {
+        CUDA_CALL_AND_CHECK(
+            cudaMemcpy(
+                device_values_csc + curr_size, matrix.device_values_csc + ranges[i].first, 
+                (ranges[i].second - ranges[i].first) * sizeof(double), cudaMemcpyDeviceToDevice),
+            "cudaMemcpy"
+        );
+        CUDA_CALL_AND_CHECK(
+            cudaMemcpy(
+                device_id_csc + curr_size, matrix.device_id_csc + ranges[i].first, 
+                (ranges[i].second - ranges[i].first) * sizeof(int), cudaMemcpyDeviceToDevice),
+            "cudaMemcpy"
+        );
+        CUDA_CALL_AND_CHECK(
+            cudaMemcpy(
+                device_ptr_csc + i, &curr_size, 
+                sizeof(int), cudaMemcpyHostToDevice),
+            "cudaMemcpy"
+        );
+        curr_size += ranges[i].second - ranges[i].first;
+    }
+    CUDA_CALL_AND_CHECK(
+        cudaMemcpy(
+            device_ptr_csc + indexes.getSize(), &curr_size, 
+            sizeof(int), cudaMemcpyHostToDevice),
+        "cudaMemcpy"
+    );
+
+    CSС_exist = true;
+
+    genCsr(handle);
 }
 
 

@@ -24,12 +24,12 @@ echo "Сборка успешно завершена."
 # touch res.txt
 # for file in ../tests/test_data/*
 # do
-#     timeout 600s ./solver $file >> res.txt
+#     timeout 1500s ./solver $file 1 >> res.txt
+#     timeout 1500s ./solver $file 0 >> res.txt
 # done
 
-
-./solver ../tests/test_data/adlittle.mps
-# ./solver ../tests/test_data/bandm.mps
+timeout 1500s ./solver ../tests/test_data/boeing1.mps 0
 # ./solver ../tests/test_data/boeing1.mps
+
 
 exit 0

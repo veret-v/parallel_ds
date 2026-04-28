@@ -196,9 +196,10 @@ void CudaDualSimplex::solveLinSys(
             cu_handle, rhs, 
             sol, transpose
         );
+        CudaDataDenseVector new_rhs = sol;
         B.solve(
             cudss_handle_T, cudss_config_T, 
-            cudss_data_T, rhs, sol, transpose
+            cudss_data_T, new_rhs, sol, transpose
         );
     }
     else
@@ -207,8 +208,9 @@ void CudaDualSimplex::solveLinSys(
             cudss_handle, cudss_config, 
             cudss_data, rhs, sol, transpose
         );
+        CudaDataDenseVector new_rhs = sol;
         pfi_factor.applyPFI(
-            cu_handle, rhs, 
+            cu_handle, new_rhs, 
             sol, transpose
         );
     }
@@ -328,9 +330,10 @@ Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
         {
             pfi_factor.resetPFI();
             B.resetData(sp_handle, problem->A, basis_indexes);
+            B.createDescr();
             B.LUdecompose(
                 cudss_handle, cudss_config, cudss_data,
-                cudss_handle, cudss_config, cudss_data
+                cudss_handle_T, cudss_config_T, cudss_data_T
             );
         }
         
@@ -339,7 +342,6 @@ Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
         double weight_tmp;
         bool candid_find = false;
         int p, p_idx;
-
         for (int i = 0; i < basis_size; i++)
         {
             int j = basis_indexes[i];
@@ -379,7 +381,7 @@ Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
         rhs.initUnitVec(p_idx);
         rhs.updateDeviceMem();
         solveLinSys(true, rhs, rho);
-        
+       
         // (Step 4) Pivot row
         problem->A.dotUpdate(
             sp_handle,
@@ -390,9 +392,11 @@ Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
             false
         );
         alpha.updateHostMem();
+        // alpha.show();
        
         // (Step 5) Ratio Test
         if (f[p_idx] > 0) alpha.multiplyHostData(-1);
+
         IndexVector F;
         for (int i = 0; i < non_basis_indexes.getSize(); i++)
         {
@@ -443,17 +447,9 @@ Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
         theta = d[q] / alpha[q_idx]; 
         
         // (Step 6) FTran
-        rhs.updateHostMem();
-        rhs.show();
-        problem->A.show();
-        exit();
         problem->A.getColumn(sp_handle, q, rhs);
-        rhs.updateHostMem();
-        rhs.show();
-        
         solveLinSys(false, rhs, alpha_q);
         alpha_q.updateHostMem();
-        alpha_q.show();
 
         // (Step 7) Basis change and update
         double infisib_corr = 0;
@@ -486,10 +482,10 @@ Phase1OutStatus CudaDualSimplex::minimizeDualInfeasibility()
         }  
         beta[p_idx] = beta[p_idx] / pow(alpha_q[p_idx], 2);
         f[p_idx] = f[p_idx] / alpha_q[p_idx] + infisib_corr;
-        
+
         basis_indexes.update(p_idx, q);
         non_basis_indexes.update(q_idx, p);
-
+        
         pfi_factor.addEtaMatrix(p_idx, new_eta_matrix);
 
         cycle_num = (fabs(theta) < EPS_A) ? cycle_num + 1 : 0;
@@ -526,14 +522,15 @@ bool CudaDualSimplex::elaboratedMethod()
     CudaDataDenseVector delta_xB(basis_size);
     CudaDataDenseVector new_eta_matrix(basis_size);
 
-    std::vector<double> difference_bounds = problem->upper_bound - problem->lower_bound;
+    std::vector<double> difference_bounds = std::move(problem->upper_bound - problem->lower_bound);
         
     std::random_device              rd;
     std::mt19937                    gen(rd());
     std::uniform_int_distribution<> distrib(0, 1);
     std::uniform_int_distribution<> non_basis_rand(0, non_basis_size);
 
-     problem->A.dotUpdate(
+    x.updateDeviceMem();
+    problem->A.dotUpdate(
         sp_handle,
         x, problem->RHS, 
         problem->RHS, -1, 1, 
@@ -541,17 +538,16 @@ bool CudaDualSimplex::elaboratedMethod()
         SpmvOptions::UPDATE,
         true
     );
-    problem->RHS.updateHostMem();
 
-    solveLinSys(true, problem->RHS, buff_sol);
+    solveLinSys(false, problem->RHS, buff_sol);
     buff_sol.updateHostMem();
-    x.updateByPartialVec(buff_sol, basis_indexes);
-
+    x.setValues(buff_sol, basis_indexes);
+   
     rhs.updateByPartialVec(problem->costs, basis_indexes);
     rhs.updateDeviceMem();
     solveLinSys(true, rhs, y);
 
-     problem->A.dotUpdate(
+    problem->A.dotUpdate(
         sp_handle,
         y, problem->costs, 
         d, -1, 1, 
@@ -560,7 +556,7 @@ bool CudaDualSimplex::elaboratedMethod()
         true
     );
     d.updateHostMem();
-
+  
     x.updateDeviceMem();
     obj_func_val = problem->costs.dot(cu_handle, x);
 
@@ -590,9 +586,18 @@ bool CudaDualSimplex::elaboratedMethod()
             x.updateDeviceMem();
             obj_func_val = problem->costs.dot(cu_handle, x);
         }
-        #ifdef DEBUG
-        std::cout << iteration << " : Z = "<< obj_func_val << std::endl;
-        #endif
+
+        if (iteration % REFACT_FREQ == 0)
+        {
+            pfi_factor.resetPFI();
+            B.resetData(sp_handle, problem->A, basis_indexes);
+            B.createDescr();
+            B.LUdecompose(
+                cudss_handle, cudss_config, cudss_data,
+                cudss_handle_T, cudss_config_T, cudss_data_T
+            );
+        }
+        
         // (Step 2) Pricing
         double delta;
         int p;
@@ -647,7 +652,7 @@ bool CudaDualSimplex::elaboratedMethod()
         rhs.initUnitVec(p_idx);
         rhs.updateDeviceMem();
         solveLinSys(true, rhs, rho);
-
+       
         // (Step 4) Pivot row
         problem->A.dotUpdate(
             sp_handle,
@@ -662,16 +667,16 @@ bool CudaDualSimplex::elaboratedMethod()
         // (Step 5) Ratio Test
         delta = fabs(delta);
         int sgn = (is_lower) ? -1 : 1;
-        tmp_alpha_p = (is_lower) ? -alpha_p : alpha_p;
+        if (is_lower) alpha_p.multiplyHostData(-1);
 
         IndexVector F;
         for (int i = 0; i < non_basis_size; i++)
         {
             int j = non_basis_indexes[i];
-            if ((tmp_alpha_p[i] > EPS_ALPHA && fabs(x[j] - problem->lower_bound[j]) < EPS_BOUND  &&
+            if ((alpha_p[i] > EPS_A && fabs(x[j] - problem->lower_bound[j]) < EPS_Z  &&
                 (problem->bound_type[j] == BoundaryType::Lower || 
                 problem->bound_type[j] == BoundaryType::Boxed)) ||
-                (tmp_alpha_p[i] < -EPS_ALPHA && fabs(x[j] - problem->upper_bound[j]) < EPS_BOUND && 
+                (alpha_p[i] < -EPS_A && fabs(x[j] - problem->upper_bound[j]) < EPS_Z && 
                 (problem->bound_type[j] == BoundaryType::Upper || 
                 problem->bound_type[j] == BoundaryType::Boxed)) ||
                 problem->bound_type[j] == BoundaryType::Free)
@@ -679,17 +684,17 @@ bool CudaDualSimplex::elaboratedMethod()
         }
 
         int q_idx, q;
-        double theta;
+        double theta = INF;
         while (F.size() && delta >= 0)
         {
             int it = 0;
             q_idx = F[0];
             q = non_basis_indexes[q_idx];
-            theta = (d[q] / tmp_alpha_p[q_idx]);
+            theta = (d[q] / alpha_p[q_idx]);
             for (auto i : F)
             {   
                 int j = non_basis_indexes[i];
-                double theta_tmp = d[j] / tmp_alpha_p[i];
+                double theta_tmp = d[j] / alpha_p[i];
                 if (theta_tmp < theta || (fabs(theta_tmp - theta) < EPS_Z && distrib(gen) == 1))
                 {
                     theta = theta_tmp;
@@ -707,6 +712,8 @@ bool CudaDualSimplex::elaboratedMethod()
                 break;
             }
         }
+
+        if (is_lower) alpha_p.multiplyHostData(-1);
         theta = d[q] / alpha_p[q_idx];
         delta = sgn * delta;
 
@@ -718,8 +725,7 @@ bool CudaDualSimplex::elaboratedMethod()
         }
 
         // (Step 6) FTran
-        problem->A.getColumn(sp_handle, q_idx, rhs);
-        rhs.updateDeviceMem();
+        problem->A.getColumn(sp_handle, q, rhs);
         solveLinSys(false, rhs, alpha_q);
         alpha_q.updateHostMem();
 
@@ -736,12 +742,12 @@ bool CudaDualSimplex::elaboratedMethod()
             if (problem->bound_type[j] == BoundaryType::Boxed)
             {
             
-                if (x[j] == problem->lower_bound[j] && d[j] < 0)
+                if (fabs(x[j] - problem->lower_bound[j]) < EPS_Z && d[j] < 0)
                 {
                     infeas_idx.push_back(j);
                     delta_z += problem->costs[j] * (problem->upper_bound[j] - problem->lower_bound[j]);
                 }  
-                else if (x[j] == problem->upper_bound[j] && d[j] > 0)
+                else if (fabs(x[j] - problem->upper_bound[j]) < EPS_Z && d[j] > 0)
                 {
                     infeas_idx.push_back(j);
                     delta_z -= problem->costs[j] * (problem->upper_bound[j] - problem->lower_bound[j]);
@@ -760,7 +766,7 @@ bool CudaDualSimplex::elaboratedMethod()
 
             rhs.updateByPartialVec(x, basis_indexes);
             rhs.axpyUpdate(cu_handle, delta_xB, -1);
-            x.updateByPartialVec(rhs, basis_indexes);
+            x.setValues(rhs, basis_indexes);
 
             for (int i = 0; i < basis_size; i++)
             {
@@ -796,7 +802,7 @@ bool CudaDualSimplex::elaboratedMethod()
         // Flip bounds
         for (auto j : infeas_idx)
         {
-            if (x[j] == problem->lower_bound[j])
+            if (fabs(x[j] - problem->lower_bound[j]) < EPS_Z)
                 x[j] = problem->upper_bound[j];
             else 
                 x[j] = problem->lower_bound[j]; 
@@ -805,6 +811,10 @@ bool CudaDualSimplex::elaboratedMethod()
 
         iteration += 1;
         if (fabs(theta) < EPS_A) cycle_num += 1;
+
+        #ifdef DEBUG
+            std::cout << iteration << " : Z = "<< obj_func_val << " delta_z = " << delta_z << " p_info:" << p << " q_info:" << q << std::endl;
+        #endif
     }
     std::cout << "iterations = " << iteration << std::endl;
     return problem->solution.solved;

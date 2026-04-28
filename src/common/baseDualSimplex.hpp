@@ -38,7 +38,7 @@
 #define MAX_CYCLE     5
 #define NEED_RESTART  500
 #define REFACT_FREQ   400
-#define RESTART_SIZE  5
+#define RESTART_SIZE  10
 #define MAX_ITER      40000
 #define INF           1e+80
 

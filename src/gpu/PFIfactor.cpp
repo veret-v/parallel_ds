@@ -37,7 +37,7 @@ PFIfactor::~PFIfactor()
 }
 
 
-void PFIfactor::addEtaMatrix(const int q, CudaDataDenseVector vals)
+void PFIfactor::addEtaMatrix(const int q, CudaDataDenseVector& vals)
 {
     int* buff_q = nullptr;
     
@@ -74,10 +74,10 @@ void PFIfactor::addEtaMatrix(const int q, CudaDataDenseVector vals)
 
 
 void PFIfactor::applyPFI( 
-    const cublasHandle_t handle, 
-    const CudaDataDenseVector rhs, 
-    CudaDataDenseVector sol, 
-    const bool transpose
+    const cublasHandle_t& handle, 
+    const CudaDataDenseVector& rhs, 
+    CudaDataDenseVector& sol, 
+    const bool& transpose
 )
 {   
     CUBLAS_CALL_AND_CHECK(
