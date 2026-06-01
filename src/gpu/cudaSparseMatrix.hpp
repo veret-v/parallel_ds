@@ -7,8 +7,8 @@
 #include <CoinMpsIO.hpp>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
-#include <cusparse.h>
 #include <cusparse_v2.h>
+#include <cusparse.h>
 #include <cusolverDn.h>
 #include <cusolverRf.h>
 #include <cusolverSp.h>
@@ -16,6 +16,7 @@
 #include <cudss.h>
 
 #include "utillities.hpp"
+#include "cudaKernels.hpp"
 #include "cudaDataDenseVector.hpp"
 #include "cudaIndexVector.hpp"
 
@@ -69,7 +70,6 @@ private:
         std::vector<int>& col_id
     );
     void updateDataByHost(
-        cusparseHandle_t& handle, 
         const std::vector<double>& elem_csr,
         const std::vector<int>& row_ptr,
         const std::vector<int>& col_id
@@ -92,7 +92,7 @@ public:
     void getColumn(cusparseHandle_t& handle, const int p, CudaDataDenseVector& rhs) const;
     void addSparseCol(
         cusparseHandle_t& handle, CudaDataDenseVector& vec, 
-        const IndexVector& cols, const std::vector<double>& alpha);
+        const IndexVector& cols, const std::vector<double>& alpha, double multiplier);
     void addSparseCol(
         cusparseHandle_t& handle, CudaDataDenseVector& vec, 
         const IndexVector& cols, const double& alpha);
@@ -102,8 +102,8 @@ public:
         const CudaIndexVector& indexes
     );
     void initI(const int n); // заполняет как единичную матрицу(нужно в начале алгоритма, так как всегда выбираем последние n столбцов)
-    void stackColUnitMatrix(cusparseHandle_t& handle);
-    std::set<int> deleteCols(cusparseHandle_t& handle, std::set<int> cols);
+    void stackColUnitMatrix();
+    std::set<int> deleteCols(std::set<int> cols);
 
     // CudaSparseMatrix& operator=(const CudaSparseMatrix& matrix);
     CudaSparseMatrix& operator=(CoinPackedMatrix& matrix);
@@ -111,7 +111,8 @@ public:
 
     inline MatrixSize getSize() {return std::make_tuple(m, n);};
     inline MatrixSize getSize() const {return std::make_tuple(m, n);};
-
+    inline int getNnz() {return non_zero;};
+    
     // sol = alpha*A(T)*vec1 + beta*vec2
     void dotUpdate(
         cusparseHandle_t& handle, 

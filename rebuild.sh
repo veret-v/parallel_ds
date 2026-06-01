@@ -22,13 +22,16 @@ make || { echo "Ошибка сборки"; exit 1; }
 echo "Сборка успешно завершена."
 
 # touch res.txt
-# for file in ../tests/test_data/*
+# for file in ../tests/test_data/bench/*
 # do
-#     timeout 1500s ./solver $file 1 >> res.txt
-#     timeout 1500s ./solver $file 0 >> res.txt
+#     # timeout 1500s ./solver $file 1 >> res.txt
+#     timeout 1200s ./solver $file 0 >> res.txt
 # done
 
-timeout 1500s ./solver ../tests/test_data/boeing1.mps 0
+timeout 3600s ./solver ../tests/test_data/bench/adlittle.mps 0
+
+
+# timeout 1500s ./solver ../tests/test_data/kennington/ken-18.mps 1
 # ./solver ../tests/test_data/boeing1.mps
 
 

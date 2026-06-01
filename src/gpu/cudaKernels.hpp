@@ -32,16 +32,13 @@ __global__ void betaWeightsUpdateKernelOpt(
 );
 
 
-__global__ void addSpColsToVecKernel(    
-    double* vec,
-    const double* val_csc,
-    const int* id_csc,
-    const int* ptr_csc,
-    const int col_idx,
-    const double alpha
+__global__ void addSpColToVecKernel(
+    int nnz,
+    const double* __restrict__ col_vals,
+    const int* __restrict__ row_idx,
+    double* __restrict__ vec,
+    double alpha
 );
-
-
 
 __global__ void getColFromSpKernel(    
     double* vec,
@@ -107,3 +104,16 @@ __global__ void applyEtaMatTKernel(
     const int col_len
 );
 
+
+__global__ void negateKernel(double *val);
+
+
+__global__ void etaSolveKernel(
+    double *y,
+    const double *x,
+    const double *values,   
+    const int *col_id,
+    int size,
+    int col_len,
+    bool transpose
+);

@@ -5,9 +5,12 @@
 #include <iostream>
 #include <string>
 #include <cmath>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <CoinMpsIO.hpp>
+#include <ClpSimplex.hpp>
+#include <ClpPresolve.hpp>
 
 #include "types.hpp"
 #include "LPsolution.hpp"
@@ -32,41 +35,40 @@ template <typename MatrixType, typename VectorType>
 class Problem
 {
 public:
-    bool scaled = false;
-
     int problem_size;
     int constraints_size;
     int logicals_size;
 
-    LPsolution solution;
+    bool scaled = false;
+
+    double _offset;
 
     VectorType scale_rows;
     VectorType scale_cols;
 
+    LPsolution solution;
+
     BoundaryTypeVector bound_type;
+    BoundaryTypeVector range_type;
+
+    std::unique_ptr<ClpPresolve> _presolver;
+    std::unique_ptr<ClpSimplex>  _presolved_model;
+    std::unique_ptr<ClpSimplex>  _model;
 
     VectorType costs;
 
     VectorType lower_bound;
     VectorType upper_bound;
 
+    VectorType lower_range;
+    VectorType upper_range;
+
     VectorType RHS;
     
     MatrixType A;
 
     void checkConstraints();
-    void transformToComputeForm(
-        const VectorType &lower_range,
-        const VectorType &upper_range,
-        const BoundaryTypeVector &range_type,
-        Matrix& A_buff
-    );
-    void reduce(
-        VectorType &lower_range,
-        VectorType &upper_range,
-        BoundaryTypeVector &range_type,
-        Matrix& A_buff
-    );
+    void transformToComputeForm();
 
     void scale(
         Matrix& A_buff,
@@ -83,7 +85,7 @@ public:
     inline bool isinf_bound(const double x) const {return (x > BOUND_INF || x < -BOUND_INF) ? true : false;};
 
     Problem(const Problem &problem);
-    Problem() {};
+    Problem();
     Problem(
         const BoundaryTypeVector &bound_type,
         const BoundaryTypeVector &range_type,
@@ -92,13 +94,22 @@ public:
         const VectorType &upper_range,
         const VectorType &lower_bound,
         const VectorType &upper_bound,
-        const Matrix &_A
+        const MatrixType &_A
+    );
+
+    Problem(
+        const BoundaryTypeVector &_bound_type,
+        const ValuesVector &_costs,
+        const ValuesVector &_rhs,
+        const ValuesVector &_lower_bound,
+        const ValuesVector &_upper_bound,
+        Matrix &_A
     );
 
     void readMps(const std::string& file_name);
     void show();
 
-    LPsolution getSolution();
+    LPsolution& getSolution();
 };
 
 #include "problem.tpp" 

@@ -226,33 +226,22 @@ cusparseStatus_t addSpColsToVec(
 )
 {
     if (m <= 0 || n <= p) return CUSPARSE_STATUS_SUCCESS;
-    if (!vec) return CUSPARSE_STATUS_INVALID_VALUE;
+    if (!vec || !csc_val || !col_ids || !row_ptrs)
+        return CUSPARSE_STATUS_INVALID_VALUE;
+
+    int start, end;
+    cudaMemcpyAsync(&start, row_ptrs + p, sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpyAsync(&end, row_ptrs + p + 1, sizeof(int), cudaMemcpyDeviceToHost);
+    int nnz = end - start;
+    if (nnz == 0) return CUSPARSE_STATUS_SUCCESS;
 
     cudaStream_t stream = utilCusparseGetStreamFromHandle(handle);
-    cusparsePointerMode_t pointer_mode = utilCusparseGetPointerMode(handle);
+    int block = 256;
+    int grid = (nnz + block - 1) / block;
 
-    int device;
-    cudaGetDevice(&device);
-
-    cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, device);
-
-    int block_size = (prop.major >= 7) ? 256 : 128;
-    int grid_size = (m + block_size - 1) / block_size;
-    int max_blocks = prop.maxGridSize[0];
-    if (grid_size > max_blocks) grid_size = max_blocks;
-
-    addSpColsToVecKernel<<<grid_size, block_size, 0, stream>>>(
-        vec, csc_val, col_ids, row_ptrs, p, alpha
+    addSpColToVecKernel<<<grid, block, 0, stream>>>(
+        nnz, csc_val + start, col_ids + start, vec, alpha
     );
-       
-    cudaDeviceSynchronize();
-
-    cudaError_t cuda_err = cudaGetLastError();
-    if (cuda_err != cudaSuccess) {
-        return CUSPARSE_STATUS_EXECUTION_FAILED;
-    }
-    
     return CUSPARSE_STATUS_SUCCESS;
 }
 
@@ -272,7 +261,66 @@ cublasStatus_t btranOrFtran(
     if (!x || !y) return CUBLAS_STATUS_INVALID_VALUE;
 
     cudaStream_t stream = utilCublasGetStreamFromHandle(handle);
+    cublasSetStream(handle, stream);
+
     cublasPointerMode_t pointer_mode = utilCublasGetPointerMode(handle);
+
+    cudaMemcpyAsync(y, x, col_len * sizeof(double), cudaMemcpyDeviceToDevice, stream);
+
+    std::vector<int> host_col_id(size);
+    cudaMemcpy(host_col_id.data(), device_col_id, size * sizeof(int), cudaMemcpyDeviceToHost);
+
+    double *dev_alpha = nullptr;
+    cudaMalloc(&dev_alpha, sizeof(double));
+    cublasSetPointerMode(handle, CUBLAS_POINTER_MODE_DEVICE);
+
+    for (int i = 0; i < size; ++i)
+    {
+        int idx = transpose ? (size - 1 - i) : i;
+        int p = host_col_id[idx];                    
+        const double *col = device_values + (size_t)idx * col_len;
+
+        if (!transpose) 
+        {
+            cudaMemcpyAsync(dev_alpha, &y[p], sizeof(double), cudaMemcpyDeviceToDevice, stream);
+            cublasDaxpy(handle, col_len, dev_alpha, col, 1, y, 1);
+
+            cudaMemcpyAsync(&y[p], &col[p], sizeof(double), cudaMemcpyDeviceToDevice, stream);
+            cublasDscal(handle, 1, dev_alpha, &y[p], 1);
+        }
+        else 
+        {
+            cublasDdot(handle, col_len, col, 1, y, 1, dev_alpha);
+            cudaMemcpyAsync(&y[p], dev_alpha, sizeof(double), cudaMemcpyDeviceToDevice, stream);
+        }
+    }
+
+    cudaStreamSynchronize(stream);
+    cudaFree(dev_alpha);
+    cublasSetPointerMode(handle, pointer_mode);
+
+    cudaError_t err = cudaGetLastError();
+    return (err == cudaSuccess) ? CUBLAS_STATUS_SUCCESS : CUBLAS_STATUS_EXECUTION_FAILED;
+}
+
+
+
+cublasStatus_t btranOrFtran_v2(
+    cublasHandle_t handle,
+    double *y,
+    const double *x,
+    const double *device_values,
+    const int *device_col_id,
+    const int size,
+    const int col_len,
+    const bool transpose
+)
+{
+    if (col_len <= 0) return CUBLAS_STATUS_INVALID_VALUE;
+    if (!x || !y) return CUBLAS_STATUS_INVALID_VALUE;
+
+    cudaStream_t stream = utilCublasGetStreamFromHandle(handle);
+    cublasSetStream(handle, stream);
 
     int device;
     cudaGetDevice(&device);
@@ -280,117 +328,17 @@ cublasStatus_t btranOrFtran(
     cudaDeviceProp prop;
     cudaGetDeviceProperties(&prop, device);
 
-    int block_size = (prop.major >= 7) ? 256 : 128;
-    int grid_size = (col_len + block_size - 1) / block_size;
-    int max_blocks = prop.maxGridSize[0];
-    int sharedMemSize = block_size * sizeof(double);
-    if (grid_size > max_blocks) grid_size = max_blocks;
-
-    double* buff     = nullptr; 
-    double* buff_res = nullptr; 
+    // cudaMemcpyAsync(y, x, col_len * sizeof(double), cudaMemcpyDeviceToDevice, stream);
     
-    CUDA_CALL_AND_CHECK(
-        cudaMalloc(&buff, col_len*sizeof(double)),
-        "cudaMalloc for buff"
-    );
-    CUDA_CALL_AND_CHECK(
-        cudaMalloc(&buff_res, sizeof(double)),
-        "cudaMalloc for buff_res"
-    );
-
-    CUDA_CALL_AND_CHECK(
-        cudaMemcpy(
-            buff, 
-            x, 
-            col_len*sizeof(double), 
-            cudaMemcpyDeviceToDevice),
-        "cudaMemcpy for buff"
-    );   
-    CUDA_CALL_AND_CHECK(
-        cudaMemset(buff_res, 0, sizeof(double)),
-        "cudaMemset"
-    );
-
-    CUDA_CALL_AND_CHECK(
-        cudaMemcpy(
-            y, 
-            x, 
-            col_len*sizeof(double), 
-            cudaMemcpyDeviceToDevice),
-        "cudaMemcpy for y"
-    );   
-  
-    for (int i = 0; i < size; i++)
-    {
-        if (transpose)
-        {
-            applyEtaMatTKernel<<<grid_size, block_size, sharedMemSize, stream>>>(    
-                buff_res, buff,
-                device_values,
-                device_col_id,
-                size - i - 1, col_len
-            );  
-            cudaDeviceSynchronize();
-
-            int col_num;
-            CUDA_CALL_AND_CHECK(
-                cudaMemcpy(
-                    &col_num, 
-                    device_col_id + size - i - 1, 
-                    sizeof(int), 
-                    cudaMemcpyDeviceToHost),
-                "cudaMemcpy for col_num"
-            ); 
-
-            CUDA_CALL_AND_CHECK(
-                cudaMemcpy(
-                    y + col_num, 
-                    buff_res, 
-                    sizeof(double), 
-                    cudaMemcpyDeviceToDevice),
-                "cudaMemcpy for y"
-            );   
-
-            CUDA_CALL_AND_CHECK(
-                cudaMemset(buff_res, 0, sizeof(double)),
-                "cudaMemset"
-            );
-        }
-        else
-        {
-            applyEtaMatKernel<<<grid_size, block_size, 0, stream>>>(    
-                y, buff,
-                device_values,
-                device_col_id,
-                i, col_len
-            );
-            cudaDeviceSynchronize();
-        }
-
-        CUDA_CALL_AND_CHECK(
-            cudaMemcpy(
-                buff, 
-                y, 
-                col_len*sizeof(double), 
-                cudaMemcpyDeviceToDevice),
-            "cudaMemcpy for buff"
-        );   
-    }
+    int max_size = min(1024, col_len);
+    int block_size = 1;
+    while (block_size * 2 <= max_size) block_size *= 2;
     
-    CUDA_CALL_AND_CHECK(
-        cudaFree(buff),
-        "cudaFree"
-    );
-    CUDA_CALL_AND_CHECK(
-        cudaFree(buff_res),
-        "cudaFree"
-    );
-    // if (size == 1) exit(0);
-
-    cudaError_t cuda_err = cudaGetLastError();
-    if (cuda_err != cudaSuccess) {
-        return CUBLAS_STATUS_EXECUTION_FAILED;
-    }
+    etaSolveKernel<<<1, block_size, 0, stream>>>(
+        y, x, device_values, device_col_id, size, col_len, transpose);
+    cudaStreamSynchronize(stream);
     
-    return CUBLAS_STATUS_SUCCESS;
+    
+    cudaError_t err = cudaGetLastError();
+    return (err == cudaSuccess) ? CUBLAS_STATUS_SUCCESS : CUBLAS_STATUS_EXECUTION_FAILED;
 }

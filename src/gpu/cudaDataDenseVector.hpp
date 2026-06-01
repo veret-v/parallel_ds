@@ -71,7 +71,7 @@ public:
     void initUnitVec(const int p);
     void deleteVals(std::set<int> idxs);
     void resize(const int& new_size);
-    void multiplyHostData(const double& alpha);
+    void multiplyData(const double& alpha);
 
     double* getHostValues() {return host_values;};
 
@@ -98,7 +98,7 @@ public:
         const cublasHandle_t handle,
         const CudaDataDenseVector &values_vector
     ) const;
-    double norm(const cublasHandle_t handle) const;
+    double norm(const cublasHandle_t handle);
    
     void axpyUpdate(
         const cublasHandle_t handle, 

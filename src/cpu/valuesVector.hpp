@@ -10,6 +10,8 @@
 #include <unordered_set>
 
 
+#define EPS_ZERO 1e-15
+
 typedef std::vector<int> IndexVector;
 
 class Matrix;
@@ -22,6 +24,8 @@ friend class Matrix;
 
 protected:
     std::vector<double> data;
+    std::vector<double> sp_data;
+    std::vector<int> sp_idx;
  
 public:
     ValuesVector(const int size);
@@ -54,6 +58,8 @@ public:
     int getSize() {return data.size();};
 
     const std::vector<double>& getData() {return data;};
+    const std::vector<int>& getSpIdx() {return sp_idx;};
+    double* getPointerData() {return data.data();};
 
     int countNonZero() const;
 
@@ -65,6 +71,10 @@ public:
     void deleteVals(std::set<int> idxs);
     void deleteVals(IndexVector idxs);
     void pushBack(const double& value);
+    void multiplyData(double value);
+    void setSize(int new_size);
+
+    double genSparse();
 
     void show() const;
 

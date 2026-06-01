@@ -21,8 +21,8 @@ CudaDataDenseVector::CudaDataDenseVector(const int size)
 
     for (size_t i = 0; i < size; i++)
         host_values[i] = 0;
-    updateDeviceMem();
-
+    // updateDeviceMem();
+    cudaMemset(device_values, 0, size * sizeof(double));
     createDescr();
 }
 
@@ -72,9 +72,10 @@ double CudaDataDenseVector::dot(const cublasHandle_t handle, const CudaDataDense
 }
 
 
-double CudaDataDenseVector::norm(const cublasHandle_t handle) const
+double CudaDataDenseVector::norm(const cublasHandle_t handle) 
 {
     double result;
+
     CUBLAS_CALL_AND_CHECK(
         cublasDnrm2(
             handle, size, 
@@ -231,7 +232,7 @@ void CudaDataDenseVector::initUnitVec(const int p)
 }
 
 
-void CudaDataDenseVector::multiplyHostData(const double& alpha)
+void CudaDataDenseVector::multiplyData(const double& alpha)
 {
     for (int i = 0; i < size; i++)
         host_values[i] = alpha * host_values[i];

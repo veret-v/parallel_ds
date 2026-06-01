@@ -23,5 +23,12 @@ namespace linalg
         ValuesVector& sol, 
         const bool transpose
     );
+
+    void APFsolve(
+        ValuesVector& apf_values, 
+        ValuesVector& rho_values, 
+        ValuesVector& sol, 
+        bool transpose
+    );
 } // namespace linalg
 

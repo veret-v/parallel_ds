@@ -6,6 +6,7 @@
 #include <cusolverRf.h>
 #include <cusolverSp.h>
 #include <iostream>
+#include <vector>
 
 #include "cudaKernels.hpp"
 
@@ -140,3 +141,15 @@ cusparseStatus_t spmvUpdateInc(
     const bool set,
     const bool transpose
 ); 
+
+
+cublasStatus_t btranOrFtran_v2(
+    cublasHandle_t handle,
+    double *y,
+    const double *x,
+    const double *device_values,
+    const int *device_col_id,
+    const int size,
+    const int col_len,
+    const bool transpose
+);

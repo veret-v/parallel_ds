@@ -35,10 +35,12 @@ double ValuesVector::dot(const ValuesVector &values_vector) const
 {
     if (values_vector.getSize() != getSize())
     {
-        std::cerr << "Incorrect size" << std::endl;
+        std::cerr << "Incorrect size" << getSize() << " " <<  values_vector.getSize() << std::endl;
         exit(1);
     }
     double dot_val = 0;
+
+    #pragma omp parallel for reduction(+:dot_val)
     for (int i = 0; i < getSize(); i++)
         dot_val += operator[](i) * values_vector[i];
 
@@ -207,6 +209,30 @@ void ValuesVector::setValues(const ValuesVector& values_vector, const IndexVecto
     } 
 }
 
+double ValuesVector::genSparse()
+{
+    double sparsity = 0;
+    sp_data.reserve(data.size());
+    sp_idx.reserve(data.size());
+
+    for (int i = 0; i < data.size(); i++)
+    {
+        if (fabs(data[i]) > EPS_ZERO)
+        {
+            sp_data.push_back(data[i]);
+            sp_idx.push_back(i);
+            sparsity += 1;
+        }
+    }
+
+    return sparsity / data.size();
+    
+}
+
+void ValuesVector::setSize(int new_size)
+{
+    data.resize(new_size);
+}
 
 ValuesVector ValuesVector::operator()(const int start, const int stop) const
 {
@@ -214,6 +240,12 @@ ValuesVector ValuesVector::operator()(const int start, const int stop) const
     for (int i = start; i < stop; i++)
         result[i] = operator[](i);
     return result;
+}
+
+void ValuesVector::multiplyData(double value)
+{
+    for (int i = 0; i < data.size(); i++)
+        data[i] = value * data[i];
 }
 
 

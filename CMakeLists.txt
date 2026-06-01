@@ -8,9 +8,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmakeFindModules")
 
 option(BUILD_TESTS "Build tests" OFF)
 option(WITH_CUDA "Build with CUDA support" ON)
-option(WITH_MPI "Build with MPI support" OFF)
-option(WITH_OPENMP "Build with OPENMP support" OFF)
-option(WITH_AVX "Build with AVX support" OFF)
+option(WITH_MPI "Build with MPI support" ON)
+option(WITH_OPENMP "Build with OPENMP support" ON)
+option(WITH_AVX "Build with AVX support" ON)
 
 add_executable(${PROJECT_NAME})
 
@@ -18,6 +18,11 @@ add_executable(${PROJECT_NAME})
 find_package(CoinUtils REQUIRED)
 include_directories(${COINUTILS_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} ${COINUTILS_LIBRARY})
+
+find_package(Clp REQUIRED)
+include_directories(${CLP_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME} ${CLP_LIBRARY})
+
 
 # OpenMP
 if(WITH_OPENMP)

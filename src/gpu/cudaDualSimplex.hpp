@@ -20,6 +20,7 @@
 #include "../common/problem.hpp"
 #include "../common/types.hpp"
 #include "../common/LPsolution.hpp"
+#include "../common/timeProfiler.hpp"
 #include "../common/baseDualSimplex.hpp"
 
 
@@ -27,8 +28,6 @@ class CudaDualSimplex : public BaseDualSimplex<CudaSparseMatrix, CudaDataDenseVe
 {
 protected:
     PFIfactor pfi_factor;
-
-    CudaDataDenseVector beta;
 
     cudaStream_t stream     = NULL;
     
@@ -43,20 +42,39 @@ protected:
     cudssConfig_t cudss_config_T = NULL;
     cudssData_t cudss_data_T     = NULL;
 
-    void solveLinSys(const bool transpose, const CudaDataDenseVector& rhs, CudaDataDenseVector& sol);
+    double pfi = 0;
+    double ker =0;
 
-    Phase1OutStatus callPresolver(const PresolverMethods method) override;
-    bool callDualSolver(const SolverMethods method) override;
+    std::unique_ptr<TimeProfiler> _timer;
+
+    void solveLinSys(
+        CudaDataDenseVector& rhs, 
+        CudaDataDenseVector& sol,
+        bool transpose
+    ) override;
+
+    bool callDualSolver() override;
     bool callPrimalSolver() override;
-    
-    SolverMethods    stringToSolverMethod(const std::string& method_name) override;
+
     PresolverMethods stringToPreSolverMethod(const std::string& method_name) override;
 
-    Phase1OutStatus minimizeDualInfeasibility();
+    void BTran(int p_idx, CudaDataDenseVector& rho) override;
+    void pivotRow(CudaDataDenseVector& rho, CudaDataDenseVector& alpha) override;
+    void FTran(int q, CudaDataDenseVector& alpha_q) override;
+    void initReducedCosts() override;
+    void initPhase1PricingVector(CudaDataDenseVector& f, IndexVector& inf_u_indexes, IndexVector& inf_l_indexes, double& Z) override;
+    void reFactorize() override;
+    void simpleReducedCostsUpate(const CudaDataDenseVector& alpha, int p, int q, double theta) override;
+    void updateAndChangeBasis(
+        CudaDataDenseVector& f, CudaDataDenseVector& rho, const CudaDataDenseVector& alpha_q, 
+        int p_idx, int p, int q_idx, int q, double theta_P
+    ) override;
+    void phase1UpdateAndChangeBasis(
+        CudaDataDenseVector& f, CudaDataDenseVector& rho, const CudaDataDenseVector& alpha_q, 
+        int p_idx, int p, int q_idx, int q, double theta_P
+    ) override;
 
-    bool elaboratedMethod();
-
-    void initBetaWeights();
+    void dualSimplexInit() override;
 
 public:
     CudaDualSimplex(Problem<CudaSparseMatrix, CudaDataDenseVector>& _problem) : 
@@ -66,6 +84,7 @@ public:
     using BaseDualSimplex::BaseDualSimplex;
     ~CudaDualSimplex();
 
+    // Init params, setting data according to index arrays
     void initDualSimplex();
 };
 

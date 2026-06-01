@@ -32,8 +32,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/cpu/templates.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cpu/sequentialDualSimplex.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cpu/sequentialDualSimplex.cpp
-    # ${CMAKE_CURRENT_SOURCE_DIR}/cpu/parallelDualSimplex.hpp
-    # ${CMAKE_CURRENT_SOURCE_DIR}/cpu/parallelDualSimplex.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/parallelDualSimplex.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu/parallelDualSimplex.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/common/baseDualSimplex.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/common/baseDualSimplex.tpp
     ${CMAKE_CURRENT_SOURCE_DIR}/common/problem.hpp
@@ -46,6 +46,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/cpu/linalg.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/common/LPsolution.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/common/LPsolution.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/timeProfiler.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/timeProfiler.cpp
 )
 
 add_library(app_test STATIC

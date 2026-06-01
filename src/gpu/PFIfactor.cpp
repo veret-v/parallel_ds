@@ -65,6 +65,7 @@ void PFIfactor::addEtaMatrix(const int q, CudaDataDenseVector& vals)
             cudaMemcpyHostToDevice),
         "cudaMemcpy : buff_q"
     );
+    
 
     CUDA_CALL_AND_CHECK(cudaFreeHost(buff_q),
                         "cudaFree : buff_q");
@@ -81,7 +82,7 @@ void PFIfactor::applyPFI(
 )
 {   
     CUBLAS_CALL_AND_CHECK(
-        btranOrFtran(
+        btranOrFtran_v2(
             handle,
             sol.device_values,
             rhs.device_values,

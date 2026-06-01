@@ -1,6 +1,9 @@
 #include <filesystem>
 #include <algorithm>
 
+#include <omp.h>
+#include <mpi.h>
+
 #include "./cpu/valuesVector.hpp"
 #include "./cpu/matrix.hpp"
 #include "./common/problem.hpp"
@@ -34,36 +37,73 @@ Runner::~Runner()
 
 int main(int argc, char* argv[])
 {
-    
     std::string file_name = argv[1];
-    int run_cuda = std::stoi(argv[2]);
-    if (!run_cuda)
+    int solver_type = std::stoi(argv[2]);
+    if (solver_type == 0)
     { 
-        Problem<Matrix, ValuesVector> problem2;
-        problem2.readMps(file_name);
+        Problem<Matrix, ValuesVector> problem;
+        problem.readMps(file_name);
+        problem.transformToComputeForm();
         
-        SequentialDualSimplex solver2(problem2);
-        solver2.initDualSimplex();
-        solver2.presolve("minInfeas");
-        solver2.solve("elaborated");
+        SequentialDualSimplex solver_seq(problem);
+        solver_seq.initDualSimplex();
+        solver_seq.presolve("minInfeas");
+        solver_seq.solve();
 
         std::cout << "Sequential:" << std::endl;
-        LPsolution solution2 = problem2.getSolution();
-        solution2.show();
+        LPsolution solution_seq = problem.getSolution();
+        solution_seq.show();
     } 
-    else
+    else if (solver_type == 1)
     {
-        Problem<CudaSparseMatrix, CudaDataDenseVector> problem1;
-        problem1.readMps(file_name);
+        Problem<CudaSparseMatrix, CudaDataDenseVector> problem_cuda;
+        problem_cuda.readMps(file_name);
+        problem_cuda.transformToComputeForm();
         
-        CudaDualSimplex solver1(problem1);
-        solver1.initDualSimplex();
-        solver1.presolve("minInfeas");
-        solver1.solve("elaborated");
+        CudaDualSimplex solver_cuda(problem_cuda);
+        solver_cuda.initDualSimplex();
+        solver_cuda.presolve("minInfeas");
+        solver_cuda.solve();
 
         std::cout << "Cuda:" << std::endl;
-        LPsolution solution1 = problem1.getSolution();
-        solution1.show();
+        LPsolution solution_cuda = problem_cuda.getSolution();
+        solution_cuda.show();
+    }
+    else if (solver_type == 2)
+    {
+        MPI_Init(&argc, &argv);
+
+        int rank, size;
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);  
+        MPI_Comm_size(MPI_COMM_WORLD, &size);  
+
+        Problem<Matrix, ValuesVector> problem;
+        problem.readMps(file_name);
+        problem.transformToComputeForm();
+            
+        if (rank == 0)
+        {
+            omp_set_num_threads(4);  
+
+            ParallelDualSimplex solver_master(problem);
+            solver_master.initMaster(0, size);
+            solver_master.presolve("minInfeas");
+            solver_master.solveMaster();
+
+            std::cout << "MPI:" << std::endl;
+            LPsolution solution = problem.getSolution();
+            solution.show();
+        }
+        else
+        {
+            omp_set_num_threads(1);  
+
+            ParallelDualSimplex solver_worker(problem);
+            solver_worker.initWorker(0, rank);
+            solver_worker.solveWorker();
+        }
+        
+        MPI_Finalize();
     }
 }
 

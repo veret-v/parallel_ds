@@ -156,22 +156,19 @@ __global__ void spmvUpdateTKernel(
     }
 }
 
-
-__global__ void addSpColsToVecKernel(    
-    double* vec,
-    const double* val_csc,
-    const int* id_csc,
-    const int* ptr_csc,
-    const int col_idx,
-    const double alpha
-)
-{
-    int t_id = threadIdx.x + blockDim.x * blockIdx.x; 
-    int stride = blockDim.x * gridDim.x;
-
-    for (int row = ptr_csc[col_idx] + t_id; row < ptr_csc[col_idx + 1]; row += stride)
-    {
-        vec[id_csc[row]] += alpha * val_csc[row];
+__global__ void addSpColToVecKernel(
+    int nnz,
+    const double* __restrict__ col_vals,
+    const int* __restrict__ row_idx,
+    double* __restrict__ vec,
+    double alpha
+) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x; 
+    for (tid; tid < nnz; tid += stride) {
+        int row = row_idx[tid];
+        double val = col_vals[tid];
+        atomicAdd(&vec[row], alpha * val);
     }
 }
 
@@ -254,8 +251,73 @@ __global__ void applyEtaMatTKernel(
 }
 
 
+__global__ void negateKernel(double *val) {
+    *val = -(*val);
+}
+
 
 template __global__ void betaWeightsUpdateKernelOpt<256, 4>(
     int n, const double* x, int incx,
     const double* y, int incy,
     double* z, int incz, int pivot_idx);
+
+
+
+__global__ void etaSolveKernel(
+    double *y,
+    const double *x,
+    const double *values,   
+    const int *col_id,
+    int size,
+    int col_len,
+    bool transpose
+)
+{
+    int tid = threadIdx.x;
+    int stride = blockDim.x;
+
+    for (int i = tid; i < col_len; i += stride) {
+        y[i] = x[i];
+    }
+    __syncthreads();
+
+    for (int step = 0; step < size; ++step) {
+        int idx = transpose ? (size - 1 - step) : step;
+        int p = col_id[idx];
+        const double *col = values + (size_t)idx * col_len;
+
+        if (!transpose) {
+            double alpha = y[p];
+            for (int i = tid; i < col_len; i += stride) {
+                double add = alpha * col[i];
+                if (i == p)
+                    y[i] = add;      // прямая замена, без добавки
+                else
+                    y[i] += add;
+            }
+            __syncthreads();
+        } else {
+            double sum = 0.0;
+            for (int i = tid; i < col_len; i += stride) {
+                sum += col[i] * y[i];
+            }
+
+            __shared__ double sdata[1024];  
+            sdata[tid] = sum;
+            __syncthreads();
+
+            for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+                if (tid < s) {
+                    sdata[tid] += sdata[tid + s];
+                }
+                __syncthreads();
+            }
+
+            if (tid == 0) 
+            {
+                y[p] = sdata[0];
+            }
+            __syncthreads();
+        }
+    }
+}

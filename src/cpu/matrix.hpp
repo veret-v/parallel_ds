@@ -3,11 +3,14 @@
 #include <typeinfo>
 #include <tuple>
 #include <iostream> 
+#include <algorithm>
+#include <vector>
 #include <unordered_set>
 #include <set>
 #include <CoinPackedMatrix.hpp>
 
 #include "mkl.h"
+#include "mkl_spblas.h"
 
 #include "valuesVector.hpp"
 
@@ -38,6 +41,19 @@ protected:
     std::vector<double> elem_csr;
     std::vector<int> row_ptr;
     std::vector<int> col_id;
+
+    // Данные для CSC (генерируются один раз)
+    std::vector<int> csc_col_ptr_;   // size n+1
+    std::vector<int> csc_row_idx_;   // size nnz
+    std::vector<double>  csc_values_;    // size nnz
+
+    sparse_matrix_t csr_handle_ = nullptr;    // для A (прямое умножение)
+    matrix_descr    csr_descr_;
+    bool            csr_built_ = false;
+
+    sparse_matrix_t csc_handle_ = nullptr;    // для A^T (транспонированное)
+    matrix_descr    csc_descr_;
+    bool            csc_built_ = false;
 
     void copyCoinPackedMatrix(CoinPackedMatrix& matrix);
     void cleanLUinfo();
@@ -80,18 +96,34 @@ public:
     inline std::vector<int> getRowIds() const {return col_id;};
 
     void stackColUnitMatrix();
-    std::set<int> deleteCols(std::set<int> cols);
+    void genSparseReprs();   // строит CSC и создаёт MKL-дескриптор
+    void deleteCols(std::set<int> cols);
+    void deleteRows(std::set<int> cols);
+    void addSparseCol(
+        ValuesVector& res, const IndexVector& indexes, 
+        const ValuesVector& multiplier, double extra_mult
+    ) const;
+    void addSparseCol(ValuesVector& res, const int& id, double extra_mult) const;
+    void addSparseColParallel(
+        ValuesVector& res, const IndexVector& indexes, 
+        const ValuesVector& multiplier, double extra_mult
+    ) const;
+
 
     // sol = alpha*A(T)*vec1 + beta*vec2
     void dotUpdate(
-        const ValuesVector& vec1, 
-        const ValuesVector& vec2, 
+        ValuesVector& vec1, 
+        ValuesVector& vec2, 
         ValuesVector& sol, 
         const double alpha, 
         const double beta,
         const IndexVector& cols_idx,
         const SpmvOptions& method,
         const bool set
+    );
+    double dotCol(
+        ValuesVector& vec1, 
+        int col_id
     );
 
     void LUdecompose();

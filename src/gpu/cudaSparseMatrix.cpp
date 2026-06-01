@@ -618,16 +618,14 @@ CudaSparseMatrix& CudaSparseMatrix::operator=(
     this -> m = matrix.getNumRows();
     this -> n = matrix.getNumCols();
 
-    int non_zero_size;
-    int ptr_size;
-    
-    non_zero_size = matrix.getNumElements();
-    ptr_size = matrix.getMajorDim();
 
-    allocateMemory(non_zero_size, m, n);
+    non_zero = matrix.getNumElements();
+
+    allocateMemory(non_zero, m, n);
 
     if (matrix.isColOrdered()) 
     {
+        major_dim = matrix.getMajorDim() + 1;
         copy(
             device_values_csc, device_ptr_csc, device_id_csc,
             matrix.getElements(), matrix.getVectorStarts(), matrix.getIndices(), 
@@ -636,6 +634,7 @@ CudaSparseMatrix& CudaSparseMatrix::operator=(
 
         matrix.reverseOrdering();
 
+        major_dim = matrix.getMajorDim() + 1;
         copy(
             device_values_csr, device_ptr_csr, device_id_csr,
             matrix.getElements(), matrix.getVectorStarts(), matrix.getIndices(), 
@@ -645,6 +644,7 @@ CudaSparseMatrix& CudaSparseMatrix::operator=(
         return *this;
     }
 
+    major_dim = matrix.getMajorDim() + 1;
     copy(
         device_values_csr, device_ptr_csr, device_id_csr,
         matrix.getElements(), matrix.getVectorStarts(), matrix.getIndices(), 
@@ -653,6 +653,7 @@ CudaSparseMatrix& CudaSparseMatrix::operator=(
     
     matrix.reverseOrdering();
 
+    major_dim = matrix.getMajorDim() + 1;
     copy(
         device_values_csc, device_ptr_csc, device_id_csc,
         matrix.getElements(), matrix.getVectorStarts(), matrix.getIndices(), 
@@ -674,7 +675,7 @@ void CudaSparseMatrix::initI(const int n)
     this -> m = n;
     this -> n = n;
 
-    major_dim = n;
+    major_dim = n + 1;
     non_zero  = n;
 
     CSС_exist = true;
@@ -700,7 +701,7 @@ void CudaSparseMatrix::initI(const int n)
     for (int i = 0; i < n + 1; i++)
     {
         buff[i] = i;
-        buff_vals[i] =  1.0;
+        buff_vals[i] = 1.0;
     }
 
     CUDA_CALL_AND_CHECK(
@@ -767,7 +768,6 @@ void CudaSparseMatrix::copyCsrToHost(
 
 
 void CudaSparseMatrix::updateDataByHost(
-    cusparseHandle_t& handle, 
     const std::vector<double>& elem_csr,
     const std::vector<int>& row_ptr,
     const std::vector<int>& col_id
@@ -785,13 +785,10 @@ void CudaSparseMatrix::updateDataByHost(
         elem_csr.data(), row_ptr.data(), col_id.data(),  
         cudaMemcpyHostToDevice
     );   
-
-    genCsc(handle);
-    createDescr();
 }
 
 
-void CudaSparseMatrix::stackColUnitMatrix(cusparseHandle_t& handle)
+void CudaSparseMatrix::stackColUnitMatrix()
 {
     std::vector<double> new_elem_csr(non_zero + m);
     std::vector<int> new_col_id(non_zero + m);
@@ -817,15 +814,18 @@ void CudaSparseMatrix::stackColUnitMatrix(cusparseHandle_t& handle)
         ptr_curr++;
     }
     row_ptr[m] += m;
-    col_id = new_col_id;
-    elem_csr = new_elem_csr;
+    col_id = std::move(new_col_id);
+    elem_csr = std::move(new_elem_csr);
     n = n + m;
 
-    updateDataByHost(handle, elem_csr, row_ptr, col_id);
+    major_dim = m + 1;
+    non_zero += m;
+
+    updateDataByHost(elem_csr, row_ptr, col_id);
 }
     
 
-std::set<int> CudaSparseMatrix::deleteCols(cusparseHandle_t& handle, std::set<int> cols)
+std::set<int> CudaSparseMatrix::deleteCols(std::set<int> cols)
 {
     std::vector<double> new_elem_csr;
     std::vector<int> new_row_ptr;
@@ -871,7 +871,7 @@ std::set<int> CudaSparseMatrix::deleteCols(cusparseHandle_t& handle, std::set<in
     n -= cols.size();
     m -= excpet_rows.size();
 
-    updateDataByHost(handle, elem_csr, row_ptr, col_id);
+    updateDataByHost(elem_csr, row_ptr, col_id);
 
     return excpet_rows;
 }
@@ -909,8 +909,11 @@ void CudaSparseMatrix::resetData(
         new_size += ranges[i].second - ranges[i].first;
     }
 
-    allocateMemory(new_size, m, n);
     non_zero = new_size;
+    this->m = matrix.m;            
+    this->n = indexes.getSize(); 
+
+    allocateMemory(new_size, m, n);
 
     int curr_size = 0;
 
@@ -995,19 +998,21 @@ int CudaSparseMatrix::calcNonzeroInColumn(const int& p) const
 
 void CudaSparseMatrix::addSparseCol(
     cusparseHandle_t& handle, CudaDataDenseVector& vec, 
-    const IndexVector& cols, const std::vector<double>& alpha
+    const IndexVector& cols, const std::vector<double>& alpha, double multiplier
 )
 {
     if (m != vec.getSize())
-    {
-        throw "Incorrect size";
-        exit(1);
-    }
+        throw std::runtime_error("Incorrect size");
 
-    for (const auto& i : cols)
-    {
-        addSpColsToVec(handle, m, n, i, vec.device_values, device_values_csc, device_id_csc, device_ptr_csc, alpha[i]);
+    for (const auto& i : cols) {
+        addSpColsToVec(handle, m, n, i,
+                       vec.device_values,
+                       device_values_csc,
+                       device_id_csc,
+                       device_ptr_csc,
+                       multiplier * alpha[i]);
     }
+    cudaDeviceSynchronize();
 }
 
 
@@ -1017,15 +1022,18 @@ void CudaSparseMatrix::addSparseCol(
 )
 {
     if (m != vec.getSize())
-    {
-        throw "Incorrect size";
-        exit(1);
-    }
+        throw std::runtime_error("Incorrect size");
 
-    for (const auto& i : cols)
-    {
-        addSpColsToVec(handle, m, n, i, vec.device_values, device_values_csc, device_id_csc, device_ptr_csc, alpha);
+    for (const auto& i : cols) {
+        addSpColsToVec(handle, m, n, i,
+                       vec.device_values,
+                       device_values_csc,
+                       device_id_csc,
+                       device_ptr_csc,
+                       alpha);
+
     }
+    cudaDeviceSynchronize();
 }
  
 
