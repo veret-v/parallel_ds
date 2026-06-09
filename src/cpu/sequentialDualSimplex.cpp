@@ -358,9 +358,9 @@ bool SequentialDualSimplex::callDualSolver()
                     (problem->bound_type[j] == BoundaryType::Upper || 
                      problem->bound_type[j] == BoundaryType::Boxed))
                     cond = true;
-            } else if (a == 0) { // учтём Free
+            } else {
                 int j = non_basis_indexes[i];
-                if (problem->bound_type[j] == BoundaryType::Free && fabs(x[j]) < EPS_Z)
+                if (problem->bound_type[j] == BoundaryType::Free)
                     cond = true;
             }
             if (cond) F.push_back(i);
@@ -425,6 +425,12 @@ bool SequentialDualSimplex::callDualSolver()
         _timer->startTimer();
         FTran(q, alpha_q);
         _timer->stopTimer(ALgorithmPart::Ftran);
+        if (fabs(alpha_q[p_idx] - alpha_p[q_idx]) > EPS_R * (1 + fabs(alpha_q[p_idx])))
+        {
+            _timer->startTimer();
+            reFactorize();
+            _timer->stopTimer(ALgorithmPart::Factor);        
+        }
 
         // (Step 7) Basis change and update
         // Update d accoprding to BRFT

@@ -336,6 +336,63 @@ void CudaDualSimplex::dualSimplexInit()
 }
 
 
+void CudaDualSimplex::harrisRatioTestPart1(IndexVector& F, IndexVector& F_l, IndexVector& F_u, const CudaDataDenseVector& alpha_p)
+{
+    int cnt = 0;
+    for (int i = 0; i < non_basis_size; ++i) {
+        bool cond = false;
+        double a = alpha_p[i];
+        if (a > EPS_A) {
+            int j = non_basis_indexes[i];
+            double xj = x[j];
+            if ((fabs(xj - problem->lower_bound[j]) && (problem->bound_type[j] == BoundaryType::Lower || problem->bound_type[j] == BoundaryType::Boxed)) < EPS_Z || problem->bound_type[j] == BoundaryType::Free)
+            {
+                cond = true;
+                F_l.push_back(i);
+            }
+        } else if (a < -EPS_A) {
+            int j = non_basis_indexes[i];
+            double xj = x[j];
+            if ((fabs(xj - problem->upper_bound[j]) < EPS_Z && (problem->bound_type[j] == BoundaryType::Upper || problem->bound_type[j] == BoundaryType::Boxed)) || problem->bound_type[j] == BoundaryType::Free)
+            {
+                cond = true;
+                F_u.push_back(i);
+            }
+        }
+        if (cond) F.push_back(i);
+    }
+}
+
+
+void CudaDualSimplex::simpleRatioTestPart1(IndexVector& F, const CudaDataDenseVector& alpha_p)
+{
+    int cnt = 0;
+    for (int i = 0; i < non_basis_size; ++i) {
+        bool cond = false;
+        double a = alpha_p[i];
+        if (a > EPS_A) {
+            int j = non_basis_indexes[i];
+            double xj = x[j];
+            if (fabs(xj - problem->lower_bound[j]) < EPS_Z &&
+                (problem->bound_type[j] == BoundaryType::Lower || 
+                    problem->bound_type[j] == BoundaryType::Boxed))
+                cond = true;
+        } else if (a < -EPS_A) {
+            int j = non_basis_indexes[i];
+            double xj = x[j];
+            if (fabs(xj - problem->upper_bound[j]) < EPS_Z &&
+                (problem->bound_type[j] == BoundaryType::Upper || 
+                    problem->bound_type[j] == BoundaryType::Boxed))
+                cond = true;
+        } else {
+            int j = non_basis_indexes[i];
+            if (problem->bound_type[j] == BoundaryType::Free)
+                cond = true;
+        }
+        if (cond) F.push_back(i);
+    }
+}
+
 bool CudaDualSimplex::callDualSolver()
 {
     
@@ -347,6 +404,7 @@ bool CudaDualSimplex::callDualSolver()
     std::vector<double> difference_bounds = std::move(problem->upper_bound - problem->lower_bound);
     
     _timer->startTimer();
+    reFactorize();
     dualSimplexInit();
     _timer->stopTimer(ALgorithmPart::Init);
 
@@ -395,14 +453,19 @@ bool CudaDualSimplex::callDualSolver()
         }
         
         // (Step 2) Pricing
+        _timer->startTimer();
         auto [p, p_idx, delta, is_lower] = DSEPricing(blocked_p);
+        _timer->stopTimer(ALgorithmPart::Pricing);
         if (p < 0 || p_idx < 0)
         {
             std::cout << "-- Soft restart. No p find." << std::endl;  
+            _timer->startTimer();
             reFactorize();
             initBetaWeights(false);
+            minimizeDualInfeasibility();
             dualSimplexInit();
             blocked_p.clear();
+            _timer->stopTimer(ALgorithmPart::RestoreProc);
             continue;
         }
         
@@ -423,29 +486,9 @@ bool CudaDualSimplex::callDualSolver()
         if (is_lower) alpha_p.multiplyData(-1);
 
         IndexVector F; F.reserve(non_basis_size);  
-        int cnt = 0;
-        for (int i = 0; i < non_basis_size; ++i) {
-            bool cond = false;
-            double a = alpha_p[i];
-            if (a > EPS_A) {
-                int j = non_basis_indexes[i];
-                double xj = x[j];
-                if (fabs(xj - problem->lower_bound[j]) < EPS_Z &&
-                    (problem->bound_type[j] == BoundaryType::Lower || problem->bound_type[j] == BoundaryType::Boxed))
-                    cond = true;
-            } else if (a < -EPS_A) {
-                int j = non_basis_indexes[i];
-                double xj = x[j];
-                if (fabs(xj - problem->upper_bound[j]) < EPS_Z &&
-                    (problem->bound_type[j] == BoundaryType::Upper || problem->bound_type[j] == BoundaryType::Boxed))
-                    cond = true;
-            } else if (a == 0) { // учтём Free
-                int j = non_basis_indexes[i];
-                if (problem->bound_type[j] == BoundaryType::Free && fabs(x[j]) < EPS_Z)
-                    cond = true;
-            }
-            if (cond) F.push_back(i);
-        }
+        // IndexVector F_l; F.reserve(non_basis_size);  
+        // IndexVector F_u; F.reserve(non_basis_size);  
+        simpleRatioTestPart1(F, alpha_p);
         _timer->stopTimer(ALgorithmPart::RatioTestPart1);
 
         // check that problem is really uboundedd, not because of numeric error
@@ -509,6 +552,12 @@ bool CudaDualSimplex::callDualSolver()
         _timer->startTimer();
         FTran(q, alpha_q);
         _timer->stopTimer(ALgorithmPart::Ftran);
+        if (fabs(alpha_q[p_idx] - alpha_p[q_idx]) > EPS_R * (1 + fabs(alpha_q[p_idx])))
+        {
+            _timer->startTimer();
+            reFactorize();
+            _timer->stopTimer(ALgorithmPart::Factor);        
+        }
 
         // (Step 7) Basis change and update
         // Update d accoprding to BRFT
@@ -572,7 +621,6 @@ bool CudaDualSimplex::callDualSolver()
         _timer->startTimer();
         double theta_P = delta / alpha_q[p_idx];
         updateAndChangeBasis(x, rho, alpha_q, p_idx, p, q_idx, q, theta_P);
-        _timer->stopTimer(ALgorithmPart::BasisUpate);
 
         // Flip bounds
         #pragma omp parallel for
@@ -581,6 +629,7 @@ bool CudaDualSimplex::callDualSolver()
         for (auto j : up_infeas_idx)  x[j] = problem->lower_bound[j]; 
         
         obj_func_val += theta * delta;
+        _timer->stopTimer(ALgorithmPart::BasisUpate);
 
         if (fabs(theta) < EPS_A) cycle_num += 1;
 
@@ -588,7 +637,13 @@ bool CudaDualSimplex::callDualSolver()
             std::cout << iteration << " : Z = "<< obj_func_val  << " delta_z = " 
                       << delta_z << " step_val = " << theta * delta  << " theta = " 
                       << theta << " delta = " << delta << " p_info:" << p << " q_info:" << q  
-                      <<  " inf:" << counterDualInfeasible() << " beta[p_idx] = " << beta[p_idx] << std::endl;
+                      <<  " inf:" << counterDualInfeasible() << " beta[p_idx] = " << beta[p_idx] 
+                      << " alpha_q[p_idx] = " << alpha_q[p_idx] << std::endl;
+        #else
+            if (iteration % 500 == 0)
+            {
+                std::cout << iteration << " : Z = "<< obj_func_val  << std::endl;
+            }
         #endif
     }
     std::cout << "iterations = " << iteration << std::endl;

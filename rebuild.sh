@@ -28,7 +28,7 @@ echo "Сборка успешно завершена."
 #     timeout 1200s ./solver $file 0 >> res.txt
 # done
 
-timeout 3600s ./solver ../tests/test_data/bench/adlittle.mps 0
+timeout 3600s ./solver ../tests/test_data/kennington/osa-30.mps 1
 
 
 # timeout 1500s ./solver ../tests/test_data/kennington/ken-18.mps 1

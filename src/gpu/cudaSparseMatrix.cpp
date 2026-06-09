@@ -971,28 +971,7 @@ int CudaSparseMatrix::calcNonzeroInColumn(const int& p) const
     );
 
     int col_size = col_end - col_start;
-    double* buff = nullptr;
-
-    CUDA_CALL_AND_CHECK(
-        cudaMallocHost(&buff, col_size*sizeof(double)),
-        "cudaMallocHost"
-    )
-    CUDA_CALL_AND_CHECK(
-        cudaMemcpy(
-            buff, device_values_csc + col_start, 
-            col_size*sizeof(double), cudaMemcpyDeviceToHost),
-        "cudaMemcpy"
-    );
-
-    for (int i = 0; i < col_size; i++)
-        count += (fabs(buff[i]) < EPS_Z) ? 0 : 1;
-
-    CUDA_CALL_AND_CHECK(
-        cudaFreeHost(buff),
-        "cudaFreeHost"
-    )
-
-    return count;
+    return col_size;
 }
 
 

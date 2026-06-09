@@ -1,0 +1,1254 @@
+============================================================
+01:04:22  Запуск тестового прогона: Ср 03 июн 2026 01:04:22 MSK
+01:04:22  Исполняемый файл: /home/vadim/Projects/dual_simplex_solver/build/solver
+01:04:22  Каталог задач: /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington
+01:04:22  Таймаут (сек): 1000
+01:04:22  Повторов на конфигурацию: 2
+01:04:22  MPI процессов (для типа 2): 6
+============================================================
+============================================================
+01:04:22  ===  Начало тестирования: CUDA  ===
+============================================================
+============================================================
+01:04:22  Задача: ken-07.mps
+============================================================
+01:04:22  --- Попытка 1 из 2 ---
+01:04:22  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/ken-07.mps" 1
+Coin0001I At line 1 NAME          KEN-07
+Coin0001I At line 2 ROWS
+Coin0001I At line 2430 COLUMNS
+Coin0001I At line 9610 RHS
+Coin0001I At line 10310 BOUNDS
+Coin0001I At line 17515 ENDATA
+Coin0002I Problem KEN-07 has 2426 rows, 3602 columns and 8404 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/ken-07.mps in 0.006751 seconds
+Coin0506I Presolve 892 (-1534) rows, 2049 (-1553) columns and 4637 (-3767) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+-- Soft restart. Check unboundness.
+-- Soft restart. Check unboundness.
+500 : Z = -6.08682e+08
+-- Soft restart. Perturb costs.
+-- Cost perturbation done
+1000 : Z = -5.73417e+08
+iterations = 1078
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization            63.154       0.86%
+Factorization            436.612       5.92%
+Pricing                   99.637       1.35%
+Btran                    793.000      10.75%
+Pivot Row                376.631       5.11%
+Ratio Test (Part1)        48.151       0.65%
+Ftran                    753.526      10.21%
+Ftran (BFRT)             421.301       5.71%
+Ftran (Beta)             546.594       7.41%
+Basis Update            2444.767      33.14%
+Ratio Test (Part2)         7.599       0.10%
+Update Reduced Costs     219.008       2.97%
+Restore Procedure       1167.432      15.82%
+--------------------------------------------
+TOTAL                   7377.414   100.00%
+============================================
+cudss: 4.000
+pfi: 318.000
+time = 7 s
+-- Optimal solution obtained with perturbation
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        -679520443.382
+phase 2 time:               992314336
+iterations:                 32254
+x0:                         28.000
+                            28.000
+                            4.000
+                            15.000
+                            44.000
+                            45.000
+                            4.000
+                            0.000
+                            28.000
+                            44.000
+                            ...
+01:04:30  РЕЗУЛЬТАТ: Завершено успешно
+01:04:30  --- Попытка 2 из 2 ---
+01:04:30  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/ken-07.mps" 1
+Coin0001I At line 1 NAME          KEN-07
+Coin0001I At line 2 ROWS
+Coin0001I At line 2430 COLUMNS
+Coin0001I At line 9610 RHS
+Coin0001I At line 10310 BOUNDS
+Coin0001I At line 17515 ENDATA
+Coin0002I Problem KEN-07 has 2426 rows, 3602 columns and 8404 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/ken-07.mps in 0.00508 seconds
+Coin0506I Presolve 892 (-1534) rows, 2049 (-1553) columns and 4637 (-3767) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+-- Soft restart. Check unboundness.
+-- Soft restart. Check unboundness.
+500 : Z = -6.08682e+08
+-- Soft restart. Perturb costs.
+-- Cost perturbation done
+1000 : Z = -5.73429e+08
+iterations = 1079
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization            61.797       0.85%
+Factorization            477.430       6.57%
+Pricing                   97.729       1.35%
+Btran                    764.260      10.52%
+Pivot Row                385.753       5.31%
+Ratio Test (Part1)        45.439       0.63%
+Ftran                    737.020      10.15%
+Ftran (BFRT)             416.236       5.73%
+Ftran (Beta)             528.403       7.27%
+Basis Update            2368.056      32.60%
+Ratio Test (Part2)         7.333       0.10%
+Update Reduced Costs     210.554       2.90%
+Restore Procedure       1163.881      16.02%
+--------------------------------------------
+TOTAL                   7263.891   100.00%
+============================================
+cudss: 4.000
+pfi: 275.000
+time = 7 s
+-- Optimal solution obtained with perturbation
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        -679520443.382
+phase 2 time:               753239008
+iterations:                 32330
+x0:                         28.000
+                            28.000
+                            4.000
+                            15.000
+                            44.000
+                            45.000
+                            4.000
+                            0.000
+                            28.000
+                            44.000
+                            ...
+01:04:37  РЕЗУЛЬТАТ: Завершено успешно
+============================================================
+01:04:37  Задача: ken-11.mps
+============================================================
+01:04:37  --- Попытка 1 из 2 ---
+01:04:37  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/ken-11.mps" 1
+Coin0001I At line 1 NAME          KEN-11
+Coin0001I At line 2 ROWS
+Coin0001I At line 14698 COLUMNS
+Coin0001I At line 57344 RHS
+Coin0001I At line 60034 BOUNDS
+Coin0001I At line 102733 ENDATA
+Coin0002I Problem KEN-11 has 14694 rows, 21349 columns and 49058 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/ken-11.mps in 0.035892 seconds
+Coin0506I Presolve 5640 (-9054) rows, 12246 (-9103) columns and 28051 (-21007) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+500 : Z = -3.52706e+11
+-- Soft restart. Check unboundness.
+-- Soft restart. Check unboundness.
+-- Soft restart. Check unboundness.
+-- Soft restart. Check unboundness.
+-- Soft restart. Perturb costs.
+-- Cost perturbation done
+1000 : Z = -1.50754e+11
+-- Soft restart. Check unboundness.
+1500 : Z = -7.6264e+09
+2000 : Z = -7.38105e+09
+2500 : Z = -7.22188e+09
+3000 : Z = -7.13151e+09
+3500 : Z = -7.04874e+09
+4000 : Z = -6.98928e+09
+4500 : Z = -6.93207e+09
+5000 : Z = -6.90146e+09
+5500 : Z = -6.87172e+09
+6000 : Z = -6.85117e+09
+6500 : Z = -6.83932e+09
+iterations = 6845
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization           235.634       0.28%
+Factorization          10390.331      12.30%
+Pricing                 3642.446       4.31%
+Btran                   7189.630       8.51%
+Pivot Row               2580.711       3.06%
+Ratio Test (Part1)      1286.413       1.52%
+Ftran                   6921.599       8.19%
+Ftran (BFRT)            2943.362       3.48%
+Ftran (Beta)            5138.114       6.08%
+Basis Update           19037.413      22.54%
+Ratio Test (Part2)       156.518       0.19%
+Update Reduced Costs    3967.085       4.70%
+Restore Procedure      20976.115      24.83%
+--------------------------------------------
+TOTAL                  84465.371   100.00%
+============================================
+cudss: 4.000
+pfi: 3007.000
+time = 85 s
+-- Optimal solution obtained with perturbation
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        -6699869021.775
+phase 2 time:               -1008368672
+iterations:                 29569
+x0:                         44.000
+                            44.000
+                            44.000
+                            29.000
+                            44.000
+                            54.000
+                            22.000
+                            39.000
+                            14.000
+                            44.000
+                            ...
+01:06:03  РЕЗУЛЬТАТ: Завершено успешно
+01:06:03  --- Попытка 2 из 2 ---
+01:06:03  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/ken-11.mps" 1
+Coin0001I At line 1 NAME          KEN-11
+Coin0001I At line 2 ROWS
+Coin0001I At line 14698 COLUMNS
+Coin0001I At line 57344 RHS
+Coin0001I At line 60034 BOUNDS
+Coin0001I At line 102733 ENDATA
+Coin0002I Problem KEN-11 has 14694 rows, 21349 columns and 49058 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/ken-11.mps in 0.033401 seconds
+Coin0506I Presolve 5640 (-9054) rows, 12246 (-9103) columns and 28051 (-21007) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+500 : Z = -3.52706e+11
+-- Soft restart. Check unboundness.
+-- Soft restart. Check unboundness.
+-- Soft restart. Check unboundness.
+-- Soft restart. Check unboundness.
+-- Soft restart. Perturb costs.
+-- Cost perturbation done
+1000 : Z = -1.49648e+11
+-- Soft restart. Check unboundness.
+1500 : Z = -7.44009e+09
+2000 : Z = -7.13261e+09
+2500 : Z = -6.96494e+09
+3000 : Z = -6.88425e+09
+3500 : Z = -6.81252e+09
+4000 : Z = -6.75269e+09
+4500 : Z = -6.69862e+09
+5000 : Z = -6.64405e+09
+5500 : Z = -6.6148e+09
+6000 : Z = -6.58397e+09
+-- Soft restart. Check unboundness.
+6500 : Z = -6.46532e+09
+7000 : Z = -6.41373e+09
+7500 : Z = -6.38165e+09
+8000 : Z = -6.36672e+09
+iterations = 8406
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization           233.684       0.22%
+Factorization          13829.839      13.07%
+Pricing                 4393.128       4.15%
+Btran                   8905.095       8.42%
+Pivot Row               3174.860       3.00%
+Ratio Test (Part1)      1598.745       1.51%
+Ftran                   8815.547       8.33%
+Ftran (BFRT)            3906.265       3.69%
+Ftran (Beta)            6492.087       6.14%
+Basis Update           23751.354      22.45%
+Ratio Test (Part2)       204.951       0.19%
+Update Reduced Costs    4932.882       4.66%
+Restore Procedure      25581.292      24.17%
+--------------------------------------------
+TOTAL                 105819.729   100.00%
+============================================
+cudss: 9.000
+pfi: 4108.000
+time = 106 s
+-- Optimal solution obtained with perturbation
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        -6954975702.732
+phase 2 time:               199590880
+iterations:                 31493
+x0:                         44.000
+                            44.000
+                            44.000
+                            22.000
+                            44.000
+                            32.000
+                            19.000
+                            36.000
+                            22.000
+                            44.000
+                            ...
+01:07:50  РЕЗУЛЬТАТ: Завершено успешно
+============================================================
+01:07:50  Задача: osa-07.mps
+============================================================
+01:07:50  --- Попытка 1 из 2 ---
+01:07:50  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-07.mps" 1
+Coin0001I At line 1 NAME          OSA-07
+Coin0001I At line 2 ROWS
+Coin0001I At line 1122 COLUMNS
+Coin0001I At line 96919 RHS
+Coin0001I At line 97461 ENDATA
+Coin0002I Problem OSA-07 has 1118 rows, 23949 columns and 143694 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-07.mps in 0.040853 seconds
+Coin0506I Presolve 1047 (-71) rows, 23015 (-934) columns and 61990 (-81704) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+-- Soft restart. Perturb costs.
+-- Cost perturbation done
+-- Soft restart. Dual infeasiblity find.
+-- Soft restart. No p find.
+500 : Z = 425706
+iterations = 744
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization            67.710       1.05%
+Factorization            266.342       4.14%
+Pricing                   66.610       1.04%
+Btran                    605.500       9.41%
+Pivot Row                701.022      10.90%
+Ratio Test (Part1)       329.610       5.12%
+Ftran                    636.224       9.89%
+Ftran (BFRT)               0.000       0.00%
+Ftran (Beta)             350.041       5.44%
+Basis Update            1701.493      26.44%
+Ratio Test (Part2)        75.728       1.18%
+Update Reduced Costs     331.668       5.15%
+Restore Procedure       1302.193      20.24%
+--------------------------------------------
+TOTAL                   6434.140   100.00%
+============================================
+cudss: 4.000
+pfi: 220.000
+time = 6 s
+-- Optimal solution obtained with perturbation
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        535722.517
+phase 2 time:               -119176224
+iterations:                 29164
+x0:                         0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            ...
+01:07:58  РЕЗУЛЬТАТ: Завершено успешно
+01:07:58  --- Попытка 2 из 2 ---
+01:07:58  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-07.mps" 1
+Coin0001I At line 1 NAME          OSA-07
+Coin0001I At line 2 ROWS
+Coin0001I At line 1122 COLUMNS
+Coin0001I At line 96919 RHS
+Coin0001I At line 97461 ENDATA
+Coin0002I Problem OSA-07 has 1118 rows, 23949 columns and 143694 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-07.mps in 0.040108 seconds
+Coin0506I Presolve 1047 (-71) rows, 23015 (-934) columns and 61990 (-81704) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+-- Soft restart. Perturb costs.
+-- Cost perturbation done
+-- Soft restart. Dual infeasiblity find.
+-- Soft restart. No p find.
+500 : Z = 429163
+iterations = 683
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization            71.048       1.17%
+Factorization            273.490       4.52%
+Pricing                   63.686       1.05%
+Btran                    570.563       9.42%
+Pivot Row                629.186      10.39%
+Ratio Test (Part1)       297.598       4.92%
+Ftran                    550.547       9.09%
+Ftran (BFRT)               0.000       0.00%
+Ftran (Beta)             342.854       5.66%
+Basis Update            1566.681      25.88%
+Ratio Test (Part2)        67.663       1.12%
+Update Reduced Costs     302.825       5.00%
+Restore Procedure       1318.565      21.78%
+--------------------------------------------
+TOTAL                   6054.708   100.00%
+============================================
+cudss: 4.000
+pfi: 200.000
+time = 6 s
+-- Optimal solution obtained with perturbation
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        535722.517
+phase 2 time:               -81427488
+iterations:                 31777
+x0:                         0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            ...
+01:08:04  РЕЗУЛЬТАТ: Завершено успешно
+============================================================
+01:08:04  Задача: osa-14.mps
+============================================================
+01:08:04  --- Попытка 1 из 2 ---
+01:08:04  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-14.mps" 1
+Coin0001I At line 1 NAME          OSA-14
+Coin0001I At line 2 ROWS
+Coin0001I At line 2341 COLUMNS
+Coin0001I At line 212182 RHS
+Coin0001I At line 213333 ENDATA
+Coin0002I Problem OSA-14 has 2337 rows, 52460 columns and 314760 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-14.mps in 0.089033 seconds
+Coin0506I Presolve 2266 (-71) rows, 50457 (-2003) columns and 136870 (-177890) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Cost perturbation done
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+-- Soft restart. No p find.
+500 : Z = 846724
+1000 : Z = 858778
+iterations = 1374
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization           113.445       0.76%
+Factorization           1674.628      11.18%
+Pricing                  275.706       1.84%
+Btran                   1288.420       8.60%
+Pivot Row               1409.658       9.41%
+Ratio Test (Part1)      1373.831       9.17%
+Ftran                   1218.278       8.13%
+Ftran (BFRT)               0.000       0.00%
+Ftran (Beta)             806.736       5.38%
+Basis Update            3722.136      24.84%
+Ratio Test (Part2)       296.618       1.98%
+Update Reduced Costs    1426.029       9.52%
+Restore Procedure       1377.960       9.20%
+--------------------------------------------
+TOTAL                  14983.445   100.00%
+============================================
+cudss: 5.000
+pfi: 361.000
+time = 15 s
+-- Optimal solution obtained with perturbation
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        1106462.845
+phase 2 time:               222659552
+iterations:                 32396
+x0:                         0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            ...
+01:08:23  РЕЗУЛЬТАТ: Завершено успешно
+01:08:23  --- Попытка 2 из 2 ---
+01:08:23  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-14.mps" 1
+Coin0001I At line 1 NAME          OSA-14
+Coin0001I At line 2 ROWS
+Coin0001I At line 2341 COLUMNS
+Coin0001I At line 212182 RHS
+Coin0001I At line 213333 ENDATA
+Coin0002I Problem OSA-14 has 2337 rows, 52460 columns and 314760 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-14.mps in 0.09131 seconds
+Coin0506I Presolve 2266 (-71) rows, 50457 (-2003) columns and 136870 (-177890) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Cost perturbation done
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+500 : Z = 846337
+1000 : Z = 852059
+1500 : Z = 1.09717e+06
+iterations = 1558
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization           113.647       0.80%
+Factorization           1206.166       8.48%
+Pricing                  298.260       2.10%
+Btran                   1471.796      10.35%
+Pivot Row               1616.401      11.37%
+Ratio Test (Part1)      1525.554      10.73%
+Ftran                   1341.484       9.44%
+Ftran (BFRT)               0.000       0.00%
+Ftran (Beta)             912.451       6.42%
+Basis Update            3827.383      26.92%
+Ratio Test (Part2)       329.015       2.31%
+Update Reduced Costs    1575.238      11.08%
+Restore Procedure          0.000       0.00%
+--------------------------------------------
+TOTAL                  14217.396   100.00%
+============================================
+cudss: 5.000
+pfi: 363.000
+time = 14 s
+-- Optimal solution obtained with perturbation
+-- Correction in primal feasible and dual infeasible case done
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        1106462.845
+phase 2 time:               1692763104
+iterations:                 30203
+x0:                         0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            ...
+01:08:40  РЕЗУЛЬТАТ: Завершено успешно
+============================================================
+01:08:40  Задача: osa-30.mps
+============================================================
+01:08:40  --- Попытка 1 из 2 ---
+01:08:40  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-30.mps" 1
+Coin0001I At line 1 NAME          OSA-30
+Coin0001I At line 2 ROWS
+Coin0001I At line 4354 COLUMNS
+Coin0001I At line 404447 RHS
+Coin0001I At line 406605 ENDATA
+Coin0002I Problem OSA-30 has 4350 rows, 100024 columns and 600138 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-30.mps in 0.177253 seconds
+Coin0506I Presolve 4279 (-71) rows, 96119 (-3905) columns and 262872 (-337266) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Cost perturbation done
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+500 : Z = 1.80697e+06
+1000 : Z = 1.80703e+06
+1500 : Z = 1.81249e+06
+2000 : Z = 1.81818e+06
+2500 : Z = 1.8264e+06
+3000 : Z = 1.84314e+06
+3500 : Z = 2.06609e+06
+-- Soft restart. Dual infeasiblity find.
+-- Soft restart min infeas. Z > 0.
+-- Soft restart. No p find.
+iterations = 3851
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization           165.301       0.33%
+Factorization           4899.897       9.86%
+Pricing                 1455.541       2.93%
+Btran                   3402.877       6.85%
+Pivot Row               4451.551       8.96%
+Ratio Test (Part1)      7565.604      15.23%
+Ftran                   3348.201       6.74%
+Ftran (BFRT)               0.000       0.00%
+Ftran (Beta)            2665.955       5.37%
+Basis Update            8569.580      17.25%
+Ratio Test (Part2)      1674.741       3.37%
+Update Reduced Costs    6964.557      14.02%
+Restore Procedure       4509.737       9.08%
+--------------------------------------------
+TOTAL                  49673.543   100.00%
+============================================
+cudss: 3.000
+pfi: 907.000
+time = 50 s
+-- Optimal solution obtained with perturbation
+-- Correction in primal feasible and dual infeasible case done
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        2143492.948
+phase 2 time:               344294368
+iterations:                 32290
+x0:                         0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            ...
+01:09:37  РЕЗУЛЬТАТ: Завершено успешно
+01:09:37  --- Попытка 2 из 2 ---
+01:09:37  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-30.mps" 1
+Coin0001I At line 1 NAME          OSA-30
+Coin0001I At line 2 ROWS
+Coin0001I At line 4354 COLUMNS
+Coin0001I At line 404447 RHS
+Coin0001I At line 406605 ENDATA
+Coin0002I Problem OSA-30 has 4350 rows, 100024 columns and 600138 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-30.mps in 0.151607 seconds
+Coin0506I Presolve 4279 (-71) rows, 96119 (-3905) columns and 262872 (-337266) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Cost perturbation done
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+500 : Z = 1.80697e+06
+1000 : Z = 1.80701e+06
+1500 : Z = 1.80848e+06
+2000 : Z = 1.8133e+06
+2500 : Z = 1.81964e+06
+3000 : Z = 1.83603e+06
+3500 : Z = 2.06677e+06
+iterations = 3783
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization           159.162       0.46%
+Factorization           4205.108      12.20%
+Pricing                 1429.940       4.15%
+Btran                   2640.629       7.66%
+Pivot Row               4122.849      11.96%
+Ratio Test (Part1)      6650.831      19.29%
+Ftran                   2619.497       7.60%
+Ftran (BFRT)               0.000       0.00%
+Ftran (Beta)            1873.174       5.43%
+Basis Update            2996.178       8.69%
+Ratio Test (Part2)      1507.188       4.37%
+Update Reduced Costs    6277.206      18.20%
+Restore Procedure          0.000       0.00%
+--------------------------------------------
+TOTAL                  34481.762   100.00%
+============================================
+cudss: 3.000
+pfi: 5.000
+time = 34 s
+-- Optimal solution obtained with perturbation
+-- Correction in primal feasible and dual infeasible case done
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        2142133.192
+phase 2 time:               432374752
+iterations:                 30501
+x0:                         0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            ...
+01:10:17  РЕЗУЛЬТАТ: Завершено успешно
+============================================================
+01:10:17  Задача: osa-60.mps
+============================================================
+01:10:17  --- Попытка 1 из 2 ---
+01:10:17  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-60.mps" 1
+Coin0001I At line 1 NAME          OSA-60
+Coin0001I At line 2 ROWS
+Coin0001I At line 10284 COLUMNS
+Coin0001I At line 942147 RHS
+Coin0001I At line 947270 ENDATA
+Coin0002I Problem OSA-60 has 10280 rows, 232966 columns and 1397793 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-60.mps in 0.36014 seconds
+Coin0506I Presolve 10209 (-71) rows, 224125 (-8841) columns and 584253 (-813540) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Cost perturbation done
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+500 : Z = 3.61391e+06
+1000 : Z = 3.61393e+06
+1500 : Z = 3.61396e+06
+2000 : Z = 3.61397e+06
+2500 : Z = 3.61398e+06
+3000 : Z = 3.61401e+06
+3500 : Z = 3.6141e+06
+4000 : Z = 3.62423e+06
+4500 : Z = 3.63164e+06
+5000 : Z = 3.64372e+06
+5500 : Z = 3.65866e+06
+6000 : Z = 3.67935e+06
+6500 : Z = 3.74939e+06
+7000 : Z = 3.97037e+06
+-- Soft restart. Dual infeasiblity find.
+iterations = 7479
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization           328.224       0.24%
+Factorization          17953.739      13.38%
+Pricing                 7292.208       5.43%
+Btran                   7376.096       5.50%
+Pivot Row              10329.972       7.70%
+Ratio Test (Part1)     30358.240      22.62%
+Ftran                   8130.729       6.06%
+Ftran (BFRT)               0.000       0.00%
+Ftran (Beta)            6033.699       4.50%
+Basis Update            9682.712       7.21%
+Ratio Test (Part2)      7278.102       5.42%
+Update Reduced Costs   29095.304      21.68%
+Restore Procedure        368.499       0.27%
+--------------------------------------------
+TOTAL                 134227.523   100.00%
+============================================
+cudss: 3.000
+pfi: 1148.000
+time = 136 s
+-- Optimal solution obtained with perturbation
+-- Correction in primal feasible and dual infeasible case done
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        4044072.506
+phase 2 time:               268796896
+iterations:                 28971
+x0:                         0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            ...
+01:12:51  РЕЗУЛЬТАТ: Завершено успешно
+01:12:51  --- Попытка 2 из 2 ---
+01:12:51  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-60.mps" 1
+Coin0001I At line 1 NAME          OSA-60
+Coin0001I At line 2 ROWS
+Coin0001I At line 10284 COLUMNS
+Coin0001I At line 942147 RHS
+Coin0001I At line 947270 ENDATA
+Coin0002I Problem OSA-60 has 10280 rows, 232966 columns and 1397793 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/osa-60.mps in 0.36147 seconds
+Coin0506I Presolve 10209 (-71) rows, 224125 (-8841) columns and 584253 (-813540) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Cost perturbation done
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+500 : Z = 3.6139e+06
+-- Soft restart. No p find.
+1000 : Z = 3.61393e+06
+-- Soft restart. No p find.
+1500 : Z = 3.61395e+06
+-- Soft restart. No p find.
+2000 : Z = 3.61398e+06
+2500 : Z = 3.61406e+06
+-- Soft restart. No p find.
+3000 : Z = 3.61532e+06
+3500 : Z = 3.62232e+06
+-- Soft restart. No p find.
+-- Soft restart. Dual infeasiblity find.
+4000 : Z = 3.62686e+06
+4500 : Z = 3.62955e+06
+5000 : Z = 3.63338e+06
+5500 : Z = 3.6398e+06
+-- Soft restart. No p find.
+-- Soft restart min infeas. Z > 0.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. Z > 0.
+-- Soft restart min infeas. No p find.
+11500 : Z = 3.67917e+06
+-- Soft restart. Dual infeasiblity find.
+12000 : Z = 3.69923e+06
+12500 : Z = 3.7305e+06
+13000 : Z = 4.00416e+06
+iterations = 13400
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization           333.762       0.10%
+Factorization          18229.634       5.37%
+Pricing                 7216.734       2.13%
+Btran                   7356.842       2.17%
+Pivot Row              10297.019       3.03%
+Ratio Test (Part1)     32610.841       9.61%
+Ftran                   8173.351       2.41%
+Ftran (BFRT)               0.000       0.00%
+Ftran (Beta)            6031.758       1.78%
+Basis Update           10617.035       3.13%
+Ratio Test (Part2)      7895.102       2.33%
+Update Reduced Costs   29354.424       8.65%
+Restore Procedure     201317.487      59.31%
+--------------------------------------------
+TOTAL                 339433.987   100.00%
+============================================
+cudss: 3.000
+pfi: 2333.000
+time = 341 s
+-- Optimal solution obtained with perturbation
+-- Correction in primal feasible and dual infeasible case done
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        4044072.506
+phase 2 time:               -672824352
+iterations:                 28964
+x0:                         0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            0.000
+                            ...
+01:18:50  РЕЗУЛЬТАТ: Завершено успешно
+============================================================
+01:18:50  Задача: pds-02.mps
+============================================================
+01:18:50  --- Попытка 1 из 2 ---
+01:18:50  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/pds-02.mps" 1
+Coin0001I At line 1 NAME          PDS-02
+Coin0001I At line 2 ROWS
+Coin0001I At line 2957 COLUMNS
+Coin0001I At line 15674 RHS
+Coin0001I At line 15777 BOUNDS
+Coin0001I At line 17912 ENDATA
+Coin0002I Problem PDS-02 has 2953 rows, 7535 columns and 16390 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/pds-02.mps in 0.006079 seconds
+Coin0506I Presolve 1607 (-1346) rows, 5994 (-1541) columns and 13617 (-2773) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Cost perturbation done
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+500 : Z = -4.64024e+08
+-- Soft restart. Check unboundness.
+iterations = 813
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization            74.159       2.01%
+Factorization            298.942       8.10%
+Pricing                   68.395       1.85%
+Btran                    366.015       9.92%
+Pivot Row                181.202       4.91%
+Ratio Test (Part1)        60.289       1.63%
+Ftran                    338.884       9.19%
+Ftran (BFRT)              68.369       1.85%
+Ftran (Beta)             232.419       6.30%
+Basis Update            1074.981      29.14%
+Ratio Test (Part2)         8.378       0.23%
+Update Reduced Costs     103.499       2.81%
+Restore Procedure        813.878      22.06%
+--------------------------------------------
+TOTAL                   3689.409   100.00%
+============================================
+cudss: 3.000
+pfi: 6.000
+time = 3 s
+-- Optimal solution obtained with perturbation
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        28857862010.000
+phase 2 time:               252019680
+iterations:                 28886
+x0:                         351.000
+                            96.000
+                            513.000
+                            1104.000
+                            372.000
+                            114.000
+                            39.000
+                            57.000
+                            90.000
+                            243.000
+                            ...
+01:18:55  РЕЗУЛЬТАТ: Завершено успешно
+01:18:55  --- Попытка 2 из 2 ---
+01:18:55  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/pds-02.mps" 1
+Coin0001I At line 1 NAME          PDS-02
+Coin0001I At line 2 ROWS
+Coin0001I At line 2957 COLUMNS
+Coin0001I At line 15674 RHS
+Coin0001I At line 15777 BOUNDS
+Coin0001I At line 17912 ENDATA
+Coin0002I Problem PDS-02 has 2953 rows, 7535 columns and 16390 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/pds-02.mps in 0.00686 seconds
+Coin0506I Presolve 1607 (-1346) rows, 5994 (-1541) columns and 13617 (-2773) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Cost perturbation done
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+500 : Z = -4.64121e+08
+-- Soft restart. Check unboundness.
+iterations = 833
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization            75.352       2.35%
+Factorization            290.074       9.06%
+Pricing                   70.047       2.19%
+Btran                    359.045      11.22%
+Pivot Row                186.883       5.84%
+Ratio Test (Part1)        59.461       1.86%
+Ftran                    340.249      10.63%
+Ftran (BFRT)              68.587       2.14%
+Ftran (Beta)             234.956       7.34%
+Basis Update             623.877      19.49%
+Ratio Test (Part2)         7.441       0.23%
+Update Reduced Costs     103.657       3.24%
+Restore Procedure        780.745      24.40%
+--------------------------------------------
+TOTAL                   3200.374   100.00%
+============================================
+cudss: 3.000
+pfi: 15.000
+time = 3 s
+-- Optimal solution obtained with perturbation
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        28857862010.000
+phase 2 time:               -2140830752
+iterations:                 31445
+x0:                         351.000
+                            96.000
+                            513.000
+                            1104.000
+                            372.000
+                            114.000
+                            39.000
+                            57.000
+                            90.000
+                            243.000
+                            ...
+01:18:59  РЕЗУЛЬТАТ: Завершено успешно
+============================================================
+01:18:59  Задача: pds-06.mps
+============================================================
+01:18:59  --- Попытка 1 из 2 ---
+01:18:59  Команда: timeout 1000 /home/vadim/Projects/dual_simplex_solver/build/solver "/home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/pds-06.mps" 1
+Coin0001I At line 1 NAME          PDS-06
+Coin0001I At line 2 ROWS
+Coin0001I At line 9885 COLUMNS
+Coin0001I At line 59441 RHS
+Coin0001I At line 59801 BOUNDS
+Coin0001I At line 69042 ENDATA
+Coin0002I Problem PDS-06 has 9881 rows, 28655 columns and 62524 elements
+Clp0027I Model was imported from /home/vadim/Projects/dual_simplex_solver/tests/test_data/kennington/pds-06.mps in 0.02631 seconds
+Coin0506I Presolve 3629 (-6252) rows, 22187 (-6468) columns and 50318 (-12206) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Cost perturbation done
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+1000 : Z = -1.79682e+09
+-- Soft restart. Dual infeasiblity find.
+1500 : Z = -1.78462e+09
+2000 : Z = -1.58674e+09
+-- Soft restart. Check unboundness.
+-- Soft restart. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. Z > 0.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+Coin0001I At line 1 NAME          WOODW
+Coin0001I At line 2 ROWS
+Coin0001I At line 1102 COLUMNS
+Coin0001I At line 21590 RHS
+Coin0001I At line 21608 ENDATA
+Coin0002I Problem WOODW has 1098 rows, 8405 columns and 37474 elements
+Clp0027I Model was imported from ../tests/test_data/bench/woodw.mps in 0.009127 seconds
+Coin0506I Presolve 703 (-395) rows, 5194 (-3211) columns and 19574 (-17900) elements
+Solver initialization : started
+Solver initialization : basis columns selected
+Solver initialization : attributes setted
+Phase 1 : started
+-- Cost perturbation done
+-- Problem is feasible
+-- Nonbasis variables bounds setted done
+Phase 1 : ended
+Phase 2 : started
+500 : Z = 0.498536
+-- Soft restart. No p find.
+1000 : Z = 1.29761
+iterations = 1027
+
+========== Algorithm Time Profile ==========
+Stage                  Time (ms)     Percent
+--------------------------------------------
+Initialization            62.282       1.19%
+Factorization            349.346       6.69%
+Pricing                   61.369       1.18%
+Btran                    685.145      13.13%
+Pivot Row                420.722       8.06%
+Ratio Test (Part1)       107.886       2.07%
+Ftran                    670.888      12.86%
+Ftran (BFRT)               2.223       0.04%
+Ftran (Beta)             430.286       8.25%
+Basis Update            1843.047      35.32%
+Ratio Test (Part2)        32.053       0.61%
+Update Reduced Costs     105.860       2.03%
+Restore Procedure        447.009       8.57%
+--------------------------------------------
+TOTAL                   5218.114   100.00%
+============================================
+cudss: 3.000
+pfi: 39.000
+time = 5 s
+-- Optimal solution obtained with perturbation
+-- Solution obtained
+Phase 2 : ended
+Cuda:
+-----------------------------LP result-----------------------------
+solved:                     1
+status:                     optimal solution
+Z(obj. func. value):        1.304
+phase 2 time:               -1664777248
+iterations:                 31302
+x0:                         0.000
+                            0.000
+                            0.050
+                            0.050
+                            0.020
+                            0.020
+                            0.000
+                            0.010
+                            0.050
+                            0.020
+                            ...-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.
+-- Soft restart min infeas. No p find.

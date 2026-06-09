@@ -268,7 +268,6 @@ void Matrix::dotUpdate(
     const bool set)
 {
     ValuesVector buff(n);   // инициализирован нулями
-
     switch (method) 
     {
         case SpmvOptions::UPDATE_T:
@@ -278,9 +277,8 @@ void Matrix::dotUpdate(
                     int row_idx = csc_row_idx_[i];
                     buff[col_idx] += csc_values_[i] * vec1[row_idx] * alpha;
                 }
-                
             }
-            
+          
             for (size_t i = 0; i < cols_idx.size(); ++i) {
                 int idx = cols_idx[i];
                 sol[set ? idx : i] = buff[idx] + vec2[idx] * beta;
@@ -291,7 +289,7 @@ void Matrix::dotUpdate(
 
         case SpmvOptions::UPDATE_T_SP_COL_WISE:
         {
-            #pragma omp parallel for schedule(dynamic, 8)
+            #pragma omp parallel for schedule(dynamic, 4)
             for (auto col_idx : cols_idx) {
                 for (int i = csc_col_ptr_[col_idx]; i < csc_col_ptr_[col_idx + 1]; i++) {
                     int row_idx = csc_row_idx_[i];
@@ -311,7 +309,7 @@ void Matrix::dotUpdate(
         {
             const std::vector<int>& sp_idxs = vec1.getSpIdx();
           
-            #pragma omp parallel for schedule(dynamic, 8)
+            #pragma omp parallel for schedule(dynamic, 4)
             for (auto row_idx : sp_idxs) {
                 for (int j = row_ptr[row_idx]; j < row_ptr[row_idx + 1]; j++)
                 {
@@ -601,10 +599,7 @@ double Matrix::dotCol(
 
 int Matrix::calcNonzeroInColumn(const int& p) const
 {
-    int count = 0;
-    for (int i = 0; i < m; i++)
-        count += fabs(operator()(i, p)) < EPS_ZERO ? 0 : 1;
-    return count;
+    return csc_col_ptr_[p + 1] - csc_col_ptr_[p];
 }
 
 

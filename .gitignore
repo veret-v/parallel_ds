@@ -1,5 +1,6 @@
 build/
 .vscode/
 .VSCodeCounter/
+venv/
 todo.md
 tests/test_data/

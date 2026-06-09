@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_set>
 #include <set>
+#include <chrono>
 #include <CoinPackedMatrix.hpp>
 
 #include "mkl.h"

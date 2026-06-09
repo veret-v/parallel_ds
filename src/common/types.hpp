@@ -80,6 +80,8 @@ enum class SpmvOptions
     UPDATE_T,
     UPDATE_T_SP_ROW_WISE,
     UPDATE_T_SP_COL_WISE,
+    UPDATE_T_SP_ROW,
+    UPDATE_T_SP_COL,
     UNKNOWN
 };
 

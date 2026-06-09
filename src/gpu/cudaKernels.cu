@@ -168,7 +168,7 @@ __global__ void addSpColToVecKernel(
     for (tid; tid < nnz; tid += stride) {
         int row = row_idx[tid];
         double val = col_vals[tid];
-        atomicAdd(&vec[row], alpha * val);
+        atomicAdd(vec + row, alpha * val);
     }
 }
 

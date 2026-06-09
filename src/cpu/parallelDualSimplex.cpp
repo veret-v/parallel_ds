@@ -1,8 +1,10 @@
 #include "parallelDualSimplex.hpp"
 
 
-void ParallelDualSimplex::initMaster(int my_rank, int world_size)
+void ParallelDualSimplex::initMaster(int my_rank, int world_size, double psi)
 {
+    _psi = psi;
+
     _my_rank = my_rank;
     _my_master = 0;
     _max_cand_num = world_size - 1;
@@ -266,6 +268,7 @@ void ParallelDualSimplex::majorUpdate()
         {
             ValuesVector& curr_delta_xB = _candidates[id].delta_xB_;
             x.setValues(x(basis_indexes) - curr_delta_xB, basis_indexes);
+            #pragma omp parallel for 
             for (int i = 0; i < basis_size; ++i)
             {
                 int j = basis_indexes[i];
@@ -281,6 +284,7 @@ void ParallelDualSimplex::majorUpdate()
         int q                 = _candidates[id].q_;
         double theta_P        = _candidates[id].delta_ / alpha_q[p_idx];
 
+        #pragma omp parallel for 
         for (int i = 0; i < basis_size; i++)
         {
             int j = basis_indexes[i];
@@ -289,6 +293,9 @@ void ParallelDualSimplex::majorUpdate()
         }  
         beta[p_idx] = beta[p_idx] / pow(alpha_q[p_idx], 2);
         x[q] = x[q] + theta_P;
+
+        _mask_x_at_lower[q_idx] = (fabs(x[p] - problem->lower_bound[p]) < EPS_Z);
+        _mask_x_at_upper[q_idx] = (fabs(x[p] - problem->upper_bound[p]) < EPS_Z);
 
         basis_indexes[p_idx] =  q;
         non_basis_indexes[q_idx] = p;
@@ -309,6 +316,7 @@ void ParallelDualSimplex::minorUpate(int curr_cand, const IndexVector& low_infea
     int is_lower          = _candidates[curr_cand].is_lower_;
 
     ValuesVector new_eta_matrix(basis_size);   
+    #pragma omp parallel for
     for (int i = 0; i < basis_size; i++)
         new_eta_matrix[i] = (i != p_idx) ? -alpha_q[i] / alpha_q[p_idx] : 1 / alpha_q[p_idx]; 
     
@@ -317,6 +325,7 @@ void ParallelDualSimplex::minorUpate(int curr_cand, const IndexVector& low_infea
     x[p] = (is_lower) ? problem->lower_bound[p] : problem->upper_bound[p];
 
     // update deltas acording bfrt and classic
+    #pragma omp parallel for 
     for (int i = 0; i < _curr_cand_num; ++i)
     {
         if (_candidates[i].is_active_)
@@ -331,6 +340,12 @@ void ParallelDualSimplex::minorUpate(int curr_cand, const IndexVector& low_infea
         }
     }
     
+
+    if (problem->bound_type[q] == BoundaryType::Boxed) 
+        _boxed_in_non_basis.erase(std::remove(_boxed_in_non_basis.begin(), _boxed_in_non_basis.end(), q_idx), _boxed_in_non_basis.end());
+    if (problem->bound_type[p] == BoundaryType::Boxed) 
+        _boxed_in_non_basis.push_back(q_idx);
+
     basis_indexes[p_idx] =  q;
     non_basis_indexes[q_idx] = p;
 
@@ -356,22 +371,10 @@ void ParallelDualSimplex::updateRho(int curr_cand)
     {
         if (_candidates[i].is_active_)
         {
-            // std::cout << "rho:\n";
-            // _candidates[i].rho_.show();
-            // std::cout << "apf:\n";
-            // _candidates[curr_cand].APF_update_.show();
-            // std::cout << "prev rho apf:\n";
-            // _candidates[curr_cand].rho_.show();
-            // linalg::APFsolve(
-            //     _candidates[curr_cand].APF_update_, _candidates[curr_cand].rho_, 
-            //     _candidates[i].rho_, true
-            // );
-            // std::cout << "rho apf:\n";
-            //  _candidates[i].rho_.show();
-            //  _candidates[i].rho_ = ValuesVector(basis_size);
-             BTran(_candidates[i].p_idx_, _candidates[i].rho_);
-            // std::cout << "rho true:\n";
-            // _candidates[i].rho_.show();
+            linalg::APFsolve(
+                _candidates[curr_cand].APF_update_, _candidates[curr_cand].rho_, 
+                _candidates[i].rho_, true
+            );
         }
     }
 
@@ -672,6 +675,75 @@ bool ParallelDualSimplex::workerStage()
 }
 
 
+void ParallelDualSimplex::initTestsMasks()
+{
+    _mask_x_at_lower.clear();
+    _mask_x_at_upper.clear();;
+    _mask_is_lower_or_boxed.clear();;
+    _mask_is_upper_or_boxed.clear();;
+    _mask_is_free.clear();;
+
+    _mask_x_at_lower.resize(non_basis_size, false);
+    _mask_x_at_upper.resize(non_basis_size, false);
+    _mask_is_lower_or_boxed.resize(non_basis_size, false);
+    _mask_is_upper_or_boxed.resize(non_basis_size, false);
+    _mask_is_free.resize(non_basis_size, false);
+   
+    #pragma omp parallel for 
+    for (int i = 0; i < non_basis_size; i++)
+    {
+        int j = non_basis_indexes[i];
+        double xj = x[j];
+        _mask_x_at_lower[i] = (fabs(xj - problem->lower_bound[j]) < EPS_Z);
+        _mask_x_at_upper[i] = (fabs(xj - problem->upper_bound[j]) < EPS_Z);
+        _mask_is_lower_or_boxed[i] = (problem->bound_type[j] == BoundaryType::Lower || problem->bound_type[j] == BoundaryType::Boxed);
+        _mask_is_upper_or_boxed[i] = (problem->bound_type[j] == BoundaryType::Upper || problem->bound_type[j] == BoundaryType::Boxed);
+        _mask_is_free[i] = (problem->bound_type[j] == BoundaryType::Free);
+    }
+    
+    _boxed_in_non_basis.clear();
+    _boxed_in_non_basis.reserve(non_basis_size);
+    for (int i = 0; i < non_basis_size; i++)
+    {
+        int j = non_basis_indexes[i];
+        if (problem->bound_type[j] == BoundaryType::Boxed) _boxed_in_non_basis.push_back(i);
+    }
+    
+}
+
+
+void ParallelDualSimplex::parallelRatioTestPart1(IndexVector& F, const ValuesVector& alpha_p)
+{
+    #pragma omp parallel
+    {
+        int cnt = 0;
+        IndexVector local_F; local_F.reserve(non_basis_size / 8);
+        #pragma omp for
+        for (int i = 0; i < non_basis_size; ++i) {
+            bool cond = false;
+            double a = alpha_p[i];
+            if (a > EPS_A) {
+                if (_mask_x_at_lower[i] && (_mask_is_lower_or_boxed[i]))
+                    cond = true;
+            } else if (a < -EPS_A) {
+                if (_mask_x_at_upper[i] && (_mask_is_upper_or_boxed[i]))
+                    cond = true;
+            } else if (a == 0) { // учтём Free
+                if (_mask_is_free[i])
+                    cond = true;
+            }
+            if (cond) 
+            {
+                local_F.push_back(i);
+            }
+        }
+
+        #pragma omp critical
+        F.insert(F.end(), local_F.begin(), local_F.end());
+    }
+}
+
+
 bool ParallelDualSimplex::masterStage()
 {    
     ValuesVector rho(basis_size), alpha_q(basis_size);
@@ -687,6 +759,7 @@ bool ParallelDualSimplex::masterStage()
     reFactorize();
     dualSimplexInit();
     sendRefact();
+    initTestsMasks();
     _timer->stopTimer(ALgorithmPart::Init);
 
     int cycle_num = 0;
@@ -694,8 +767,7 @@ bool ParallelDualSimplex::masterStage()
     int major_iteration = 0;
     bool update_weights = false;
     std::unordered_set<int> blocked_p;
-
-    const double psi = 0.95;      
+    
     bool unbound_checked = false;
 
     std::cout << iteration << " : Z = "<< obj_func_val  <<  " inf:" << counterDualInfeasible() << std::endl;
@@ -718,6 +790,7 @@ bool ParallelDualSimplex::masterStage()
             minimizeDualInfeasibility();
             dualSimplexInit();
             sendRefact();
+            initTestsMasks();
             _timer->stopTimer(ALgorithmPart::RestoreProc);
         }
         if (!perturbed && cycle_num > MAX_CYCLE)
@@ -728,6 +801,7 @@ bool ParallelDualSimplex::masterStage()
             reFactorize();
             dualSimplexInit();
             sendRefact();
+            initTestsMasks();
             _timer->stopTimer(ALgorithmPart::RestoreProc);
         }
         if (iteration % REFACT_FREQ == 0)
@@ -751,19 +825,22 @@ bool ParallelDualSimplex::masterStage()
         _timer->startTimer();
         parallelDSEPricing(blocked_p);
         _curr_cand_num = std::min(static_cast<int>(_candidates.size()), _max_cand_num);
-        std::cout << _curr_cand_num << std::endl;
+        _timer->stopTimer(ALgorithmPart::Pricing);
         if (_curr_cand_num == 0)
         {
             std::cout << "-- Soft restart. No p find." << std::endl;  
+            _timer->startTimer();
             reFactorize();
             initBetaWeights(false);
             minimizeDualInfeasibility();
             dualSimplexInit();
             sendRefact();
+            initTestsMasks();
             blocked_p.clear();
+            _timer->stopTimer(ALgorithmPart::RestoreProc);
             continue;
         }
-        _timer->stopTimer(ALgorithmPart::Pricing);
+        
 
         // ---------- Minor initialisation ---------
         // send andd collect BTran 
@@ -799,7 +876,7 @@ bool ParallelDualSimplex::masterStage()
                 double old_weight = _candidates[i].weight_;
                 _candidates[i].weight_   = pow(delta, 2) /  beta[_candidates[i].p_idx_];
 
-                if (_candidates[i].weight_ < CUT_OFF * old_weight)
+                if (_candidates[i].weight_ < _psi * old_weight)
                 {
                     _candidates[i].is_active_ = false;
                     continue;
@@ -833,37 +910,13 @@ bool ParallelDualSimplex::masterStage()
             pivotRow(rho_p, alpha_p);
              _timer->stopTimer(ALgorithmPart::PivotRow);
 
-              _timer->startTimer();
+            _timer->startTimer();
             delta = fabs(delta);
             int sgn = (is_lower) ? -1 : 1;
             if (is_lower) alpha_p.multiplyData(-1);
             // Ratio test с учётом bound flips
             IndexVector F; F.reserve(non_basis_size);  
-            int cnt = 0;
-            for (int i = 0; i < non_basis_size; ++i) {
-                bool cond = false;
-                double a = alpha_p[i];
-                if (a > EPS_A) {
-                    int j = non_basis_indexes[i];
-                    double xj = x[j];
-                    if (fabs(xj - problem->lower_bound[j]) < EPS_Z &&
-                        (problem->bound_type[j] == BoundaryType::Lower || 
-                        problem->bound_type[j] == BoundaryType::Boxed))
-                        cond = true;
-                } else if (a < -EPS_A) {
-                    int j = non_basis_indexes[i];
-                    double xj = x[j];
-                    if (fabs(xj - problem->upper_bound[j]) < EPS_Z &&
-                        (problem->bound_type[j] == BoundaryType::Upper || 
-                        problem->bound_type[j] == BoundaryType::Boxed))
-                        cond = true;
-                } else if (a == 0) { // учтём Free
-                    int j = non_basis_indexes[i];
-                    if (problem->bound_type[j] == BoundaryType::Free && fabs(x[j]) < EPS_Z)
-                        cond = true;
-                }
-                if (cond) F.push_back(i);
-            }
+            parallelRatioTestPart1(F, alpha_p);
             _timer->stopTimer(ALgorithmPart::RatioTestPart1);
 
             // check that problem is really uboundedd, not because of numeric error
@@ -890,6 +943,7 @@ bool ParallelDualSimplex::masterStage()
                     minimizeDualInfeasibility();
                     dualSimplexInit();
                     sendRefact();
+                    initTestsMasks();
                     _timer->stopTimer(ALgorithmPart::RestoreProc);
 
                     break;
@@ -908,11 +962,11 @@ bool ParallelDualSimplex::masterStage()
                 std::tie(q, q_idx) = simpleRatioTest(F, alpha_p);
                 if (problem->bound_type[q] == BoundaryType::Boxed)
                 {
-                    if (delta - (problem->upper_bound[q] - problem->lower_bound[q]) * fabs(alpha_p[q_idx]) <= 0)
+                    if (delta - diff_bounds[q] * fabs(alpha_p[q_idx]) <= 0)
                     {
                         break;
                     }
-                    delta -= (problem->upper_bound[q] - problem->lower_bound[q]) * fabs(alpha_p[q_idx]);
+                    delta -= diff_bounds[q] * fabs(alpha_p[q_idx]);
                     F.erase(std::remove(F.begin(), F.end(), q_idx), F.end());
                 }
                 else
@@ -932,31 +986,51 @@ bool ParallelDualSimplex::masterStage()
             _timer->startTimer();
             FTran(q, _candidates[best_cand].alpha_q_);
             _timer->stopTimer(ALgorithmPart::Ftran);
+            if (fabs(alpha_q[p_idx] - alpha_p[q_idx]) > EPS_R * (1 + fabs(alpha_q[p_idx])))
+            {
+                _timer->startTimer();
+                reFactorize();
+                _timer->stopTimer(ALgorithmPart::Factor);        
+            }
 
             // Обработка BFRT (bound flips) and d
+             _timer->startTimer();
             IndexVector low_infeas_idx, up_infeas_idx;
+            IndexVector swap_low_infeas_idx, swap_up_infeas_idx;
+            low_infeas_idx.reserve(non_basis_size);
+            up_infeas_idx.reserve(non_basis_size);
+            swap_low_infeas_idx.reserve(non_basis_size);
+            swap_up_infeas_idx.reserve(non_basis_size);
             double delta_z = 0.0;
 
-             _timer->startTimer();
+             
+            #pragma omp parallel for 
             for (int i = 0; i < non_basis_indexes.size(); i++)
             {
                 int j = non_basis_indexes[i];
                 d[j] = d[j] - theta * alpha_p[i];  
-               
-                if (problem->bound_type[j] == BoundaryType::Boxed)
-                {
-                    if (fabs(x[j] - problem->lower_bound[j]) < EPS_Z && d[j] < -EPS_D)
-                    {
-                        low_infeas_idx.push_back(j);
-                        delta_z += problem->costs[j] * (problem->upper_bound[j] - problem->lower_bound[j]);
-                    }  
-                    else if (fabs(x[j] - problem->upper_bound[j]) < EPS_Z && d[j] > EPS_D)
-                    {
-                        up_infeas_idx.push_back(j);
-                        delta_z -= problem->costs[j] * (problem->upper_bound[j] - problem->lower_bound[j]);
-                    }   
-                }    
             }
+
+            for (auto i : _boxed_in_non_basis)
+            {
+                if (i == q_idx) continue;
+
+                int j = non_basis_indexes[i];
+                if (_mask_x_at_lower[i] && d[j] < -EPS_D)
+                {
+                    low_infeas_idx.push_back(j);
+                    swap_low_infeas_idx.push_back(i);
+                    delta_z += problem->costs[j] * diff_bounds[j];
+                    
+                }  
+                else if (_mask_x_at_upper[i] && d[j] > EPS_D)
+                {
+                    up_infeas_idx.push_back(j);
+                    swap_up_infeas_idx.push_back(i);
+                    delta_z -= problem->costs[j] * diff_bounds[j];
+                }   
+            }
+            
             problem->A.addSparseColParallel(_candidates[best_cand].column_change_, low_infeas_idx, diff_bounds, 1);
             problem->A.addSparseColParallel(_candidates[best_cand].column_change_, up_infeas_idx, diff_bounds, -1);
 
@@ -964,18 +1038,39 @@ bool ParallelDualSimplex::masterStage()
             d[q] = 0;
             _timer->stopTimer(ALgorithmPart::UpdateRedCosts);
 
-
             _candidates[best_cand].is_active_ = false;
             _candidates[best_cand].delta_ = delta;
             if (!low_infeas_idx.empty() || !up_infeas_idx.empty())
                 _candidates[best_cand].bfrt_done_ = true;
 
             // Применяем bound flips к x
-            for (auto j : low_infeas_idx) x[j] = problem->upper_bound[j];
-            for (auto j : up_infeas_idx)  x[j] = problem->lower_bound[j];
-           
             // Обновление базиса и primal/dual переменных
             _timer->startTimer();
+            #pragma omp parallel for 
+            for (auto i : swap_low_infeas_idx) 
+            {
+                int j = non_basis_indexes[i];
+                x[j] = problem->upper_bound[j];
+                _mask_x_at_lower[i] = false;
+                _mask_x_at_upper[i] = true;
+            }
+            #pragma omp parallel for 
+            for (auto i : swap_up_infeas_idx)  
+            {
+                int j = non_basis_indexes[i];
+                x[j] = problem->lower_bound[j];
+                _mask_x_at_lower[i] = true;
+                _mask_x_at_upper[i] = false;
+            }
+
+            // update masks
+            _mask_is_lower_or_boxed[q_idx] = (problem->bound_type[p] == BoundaryType::Lower || problem->bound_type[p] == BoundaryType::Boxed);
+            _mask_is_upper_or_boxed[q_idx] = (problem->bound_type[p] == BoundaryType::Upper || problem->bound_type[p] == BoundaryType::Boxed);
+            _mask_is_free[q_idx] = (problem->bound_type[p] == BoundaryType::Free);
+            _mask_x_at_lower[q_idx] = is_lower;
+            _mask_x_at_upper[q_idx] = !is_lower;
+
+            
             minorUpate(best_cand, low_infeas_idx, up_infeas_idx);
             updateApf(best_cand);
             updateRho(best_cand); // update rho for all active candidates
@@ -1001,6 +1096,7 @@ bool ParallelDualSimplex::masterStage()
 
         _timer->startTimer();
         majorUpdate();
+        // initTestsMasks();
         _timer->stopTimer(ALgorithmPart::BasisUpate);
 
         sendFullUpdateBasis(); // for workers not working in that iteration

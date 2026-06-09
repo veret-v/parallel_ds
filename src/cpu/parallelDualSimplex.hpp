@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <memory>
 #include <mpi.h>
+#include <immintrin.h>
 
 #include "linalg.hpp"
 #include "valuesVector.hpp"
@@ -38,6 +39,7 @@ protected:
     int _solved_flag = 0;
 
     int empty_message_ = 0;
+    double _psi = 0.95;  
 
     std::vector<int> _workers;
     int _my_rank;
@@ -55,9 +57,18 @@ protected:
     std::vector<double> _matrix_buff;
     std::vector<int> _id_matrix_buff;
 
+    IndexVector _boxed_in_non_basis;
+
+    std::vector<char> _mask_x_at_lower;
+    std::vector<char> _mask_x_at_upper;
+    std::vector<char> _mask_is_lower_or_boxed;
+    std::vector<char> _mask_is_upper_or_boxed;
+    std::vector<char> _mask_is_free;
 
     MPI_Status _curr_status;
 
+    void initTestsMasks();
+    void parallelRatioTestPart1(IndexVector& F, const ValuesVector& alpha_p);
     
     // for mpi
     void recvRefact();
@@ -116,7 +127,7 @@ protected:
 public:
     using BaseDualSimplex::BaseDualSimplex;
 
-    void initMaster(int my_rank, int world_size);
+    void initMaster(int my_rank, int world_size, double psi);
     void initWorker(int master_rank, int my_rank);
 
     bool masterStage();

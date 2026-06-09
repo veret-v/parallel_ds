@@ -15,7 +15,6 @@ Problem<MatrixType, VectorType>::Problem(
     checkConstraints();
 
     _model = std::make_unique<ClpSimplex>();
-    _presolver = std::make_unique<ClpPresolve>();
 
     this -> problem_size = problem.problem_size;
     this -> constraints_size = problem.constraints_size;
@@ -107,7 +106,6 @@ template <typename MatrixType, typename VectorType>
 Problem<MatrixType, VectorType>::Problem() 
 {
     _model = std::make_unique<ClpSimplex>();
-    _presolver = std::make_unique<ClpPresolve>();
 }
 
 
@@ -130,7 +128,6 @@ Problem<MatrixType, VectorType>::Problem(
     checkConstraints();
 
     _model = std::make_unique<ClpSimplex>();
-    _presolver = std::make_unique<ClpPresolve>();
 
     auto [rows, cols] = A.getSize();
 
@@ -165,7 +162,6 @@ Problem<MatrixType, VectorType>::Problem(
     checkConstraints();
 
     _model = std::make_unique<ClpSimplex>();
-    _presolver = std::make_unique<ClpPresolve>();
     
     auto [m, n] = this->A.getSize();
 
@@ -336,17 +332,16 @@ template <typename MatrixType, typename VectorType>
 void Problem<MatrixType, VectorType>::readMps(const std::string& filename)
 {
     _model->readMps(filename.c_str());
-    _presolved_model = std::unique_ptr<ClpSimplex>(_presolver->presolvedModel(*_model, 1e-8));
 
-    if (_presolved_model)
+    if (_model)
     {
-        int rows_num = _presolved_model->getNumRows();
-        int cols_num = _presolved_model->getNumCols();
+        int rows_num = _model->getNumRows();
+        int cols_num = _model->getNumCols();
 
-        A = *_presolved_model->matrix();
+        A = *_model->matrix();
     
-        const double* lower_range_parsed  = _presolved_model->getRowLower();
-        const double* upper_range_parsed  = _presolved_model->getRowUpper();
+        const double* lower_range_parsed  = _model->getRowLower();
+        const double* upper_range_parsed  = _model->getRowUpper();
 
         upper_range = VectorType(rows_num);
         lower_range = VectorType(rows_num);
@@ -369,9 +364,9 @@ void Problem<MatrixType, VectorType>::readMps(const std::string& filename)
                 range_type[i] = BoundaryType::Boxed;
         }
 
-        const double* lower_bound_parsed  = _presolved_model->getColLower();
-        const double* upper_bound_parsed  = _presolved_model->getColUpper();
-        const double* costs_parsed        = _presolved_model->getObjCoefficients();
+        const double* lower_bound_parsed  = _model->getColLower();
+        const double* upper_bound_parsed  = _model->getColUpper();
+        const double* costs_parsed        = _model->getObjCoefficients();
 
         lower_bound = VectorType(cols_num);
         upper_bound = VectorType(cols_num);
@@ -410,7 +405,7 @@ void Problem<MatrixType, VectorType>::readMps(const std::string& filename)
         this -> constraints_size = m;
         this -> logicals_size = n - m;
 
-        _offset = _presolved_model->objectiveOffset();
+        _offset = _model->objectiveOffset();
     }
     else
     {

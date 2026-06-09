@@ -12,6 +12,7 @@ Phase1OutStatus BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::presol
         perturbCosts();
 
     initBetaWeights(true);   
+
     Phase1OutStatus status = callPresolver(method);
     
     if (status == Phase1OutStatus::DualInfeas)
@@ -221,24 +222,15 @@ void BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::randomBasis()
 template <typename MatrixType, typename VectorType, typename IndexVectorType>
 bool BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::checkPerturbNeed() const
 {
-    std::vector<double> unique_data;
-    for (double c_i : problem->costs)
-    {
-        bool new_c = true;
-        for (double uniq : unique_data)
-        {
-            if (fabs(c_i - uniq) < EPS_COSTS)
-            {
-                new_c = false;
-                break;
-            }            
-        }
-        if (new_c)
-           unique_data.push_back(c_i);
-    }
-    
-    return unique_data.size() < PERTURB_RATIO * problem->costs.getSize();
+    std::vector<double> costs(problem->costs.begin(), problem->costs.end());
+    std::sort(costs.begin(), costs.end());
 
+    auto last = std::unique(costs.begin(), costs.end(),
+        [](double a, double b) { return std::fabs(a - b) < EPS_COSTS; });
+
+    int unique_count = std::distance(costs.begin(), last);
+
+    return unique_count < PERTURB_RATIO * problem->costs.getSize();
 }
 
 
@@ -581,6 +573,45 @@ typename BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::RatioTestInfo
 
 
 template <typename MatrixType, typename VectorType, typename IndexVectorType>
+typename BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::RatioTestInfo BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::harrisRatioTest(IndexVector& F, IndexVector& F_l, IndexVector& F_u, const VectorType& alpha)
+{
+    int q_idx = -1, q = -1;
+    double theta_max = INF;
+    double min_theta_l = INF;
+    double min_theta_u = INF;
+
+    for (auto i : F_l)
+    {
+        int j = non_basis_indexes[i];
+        min_theta_l = std::min((d[j] + EPS_D) / alpha[i], min_theta_l);
+    }
+
+    for (auto i : F_u)
+     {
+        int j = non_basis_indexes[i];
+        min_theta_u = std::min((d[j] - EPS_D) / alpha[i], min_theta_u);
+    }
+
+    theta_max = std::min(min_theta_l, min_theta_u);
+
+    double alpha_max = 0;
+    for (auto i : F)
+    {   
+        int j = non_basis_indexes[i];
+        double theta_tmp = d[j] / alpha[i];
+        if (theta_tmp <= theta_max && fabs(alpha[i]) >= alpha_max) 
+        {
+            alpha_max = fabs(alpha[i]);
+            q = j;
+            q_idx = i;
+        } 
+    }
+
+    return std::make_tuple(q, q_idx);
+}
+
+
+template <typename MatrixType, typename VectorType, typename IndexVectorType>
 double BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::infisibilityCorr(int q)
 {
     double infisib_corr = 0;
@@ -857,7 +888,7 @@ Phase1OutStatus BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::minimi
         if (!F.size()) 
         {
             #ifdef DEBUG
-                std::cout << "-- Soft restart" << std::endl;  
+                std::cout << "-- Soft restart min infeas." << std::endl;  
             #endif
 
             blocked_p.insert(p);
@@ -878,6 +909,10 @@ Phase1OutStatus BaseDualSimplex<MatrixType, VectorType, IndexVectorType>::minimi
         
         // (Step 6) FTran
         FTran(q, alpha_q);
+        if (fabs(alpha_q[p_idx] - alpha[q_idx]) > EPS_R * (1 + fabs(alpha_q[p_idx])))
+        {
+            reFactorize();
+        }
 
         // (Step 7) Basis change and update
         double infisib_corr = infisibilityCorr(q);

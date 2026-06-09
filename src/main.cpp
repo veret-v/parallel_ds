@@ -37,8 +37,21 @@ Runner::~Runner()
 
 int main(int argc, char* argv[])
 {
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0] << " <mps-file> <solver-type> [phi]" << std::endl;
+        return 1;
+    }
     std::string file_name = argv[1];
     int solver_type = std::stoi(argv[2]);
+    double psi = 0.95;
+    if (solver_type == 2) {
+        if (argc < 4) {
+            std::cerr << "Parallel solver requires phi parameter" << std::endl;
+            return 1;
+        }
+        psi = std::stod(argv[3]);
+    }
+
     if (solver_type == 0)
     { 
         Problem<Matrix, ValuesVector> problem;
@@ -56,6 +69,14 @@ int main(int argc, char* argv[])
     } 
     else if (solver_type == 1)
     {
+        cudaError_t err = cudaSetDevice(0);
+        if (err != cudaSuccess) {
+            std::cerr << "cudaSetDevice failed: " << cudaGetErrorString(err) << std::endl;
+            return 1;
+        }
+        // Явно форсируем инициализацию контекста
+        cudaFree(0);
+        
         Problem<CudaSparseMatrix, CudaDataDenseVector> problem_cuda;
         problem_cuda.readMps(file_name);
         problem_cuda.transformToComputeForm();
@@ -83,10 +104,10 @@ int main(int argc, char* argv[])
             
         if (rank == 0)
         {
-            omp_set_num_threads(4);  
+            omp_set_num_threads(5);  
 
             ParallelDualSimplex solver_master(problem);
-            solver_master.initMaster(0, size);
+            solver_master.initMaster(0, size, psi);
             solver_master.presolve("minInfeas");
             solver_master.solveMaster();
 

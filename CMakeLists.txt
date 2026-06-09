@@ -67,7 +67,7 @@ if(WITH_CUDA)
     target_link_libraries(${PROJECT_NAME} /usr/lib/x86_64-linux-gnu/libcudss/12/libcudss.so.0.7.1)
     
     set_target_properties(${PROJECT_NAME} PROPERTIES
-        CUDA_ARCHITECTURES "native" 
+        CUDA_ARCHITECTURES "native"
         CUDA_SEPARABLE_COMPILATION ON
         CUDA_RESOLVE_DEVICE_SYMBOLS ON
     )

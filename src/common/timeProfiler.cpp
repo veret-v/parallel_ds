@@ -116,7 +116,7 @@ void TimeProfiler::printInfo()
 
     std::cout << "\n========== Algorithm Time Profile ==========\n";
     std::cout << std::left << std::setw(20) << "Stage"
-              << std::right << std::setw(12) << "Time (ns)"
+              << std::right << std::setw(12) << "Time (ms)"
               << std::setw(12) << "Percent"
               << "\n--------------------------------------------\n";
 

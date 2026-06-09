@@ -56,6 +56,9 @@ protected:
     bool callDualSolver() override;
     bool callPrimalSolver() override;
 
+    void harrisRatioTestPart1(IndexVector& F, IndexVector& F_l, IndexVector& F_u, const CudaDataDenseVector& alpha_p);
+    void simpleRatioTestPart1(IndexVector& F, const CudaDataDenseVector& alpha_p);
+
     PresolverMethods stringToPreSolverMethod(const std::string& method_name) override;
 
     void BTran(int p_idx, CudaDataDenseVector& rho) override;

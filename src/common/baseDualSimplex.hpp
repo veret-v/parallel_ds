@@ -22,7 +22,7 @@
 
 #define EPS_BOUND 1e-10
 #define EPS_ALPHA 1e-8
-#define EPS_D     1e-8
+#define EPS_D     1e-7
 #define EPS_COSTS 1e-8
 #define EPS_A     1e-5
 #define EPS_Z     1e-10
@@ -39,6 +39,7 @@
 #define MAX_CYCLE      5 
 #define NEED_RESTART   40
 #define REFACT_FREQ    150
+#define BETA_RECOMP_FREQ 200
 #define CHECK_DUAL_INF 500
 #define RESTART_SIZE   10
 #define MAX_ITER       40000
@@ -165,6 +166,7 @@ protected:
     //Ratio tests
     IndexVector phase1SetRatioTestCandidates(const VectorType& alpha);
     RatioTestInfo simpleRatioTest(IndexVector& F, const VectorType& alpha);
+    RatioTestInfo harrisRatioTest(IndexVector& F, IndexVector& F_l, IndexVector& F_u, const VectorType& alpha);
 
 
     // Choose presolver 

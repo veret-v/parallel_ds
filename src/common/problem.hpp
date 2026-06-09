@@ -51,8 +51,6 @@ public:
     BoundaryTypeVector bound_type;
     BoundaryTypeVector range_type;
 
-    std::unique_ptr<ClpPresolve> _presolver;
-    std::unique_ptr<ClpSimplex>  _presolved_model;
     std::unique_ptr<ClpSimplex>  _model;
 
     VectorType costs;
